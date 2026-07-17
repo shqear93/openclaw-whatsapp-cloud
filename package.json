@@ -1,0 +1,80 @@
+{
+  "name": "openclaw-whatsapp-cloud",
+  "version": "0.1.0",
+  "description": "Meta WhatsApp Business Cloud API channel plugin for OpenClaw — inbound/outbound messaging, voice notes (STT/TTS), image generation, and tool-based reply delivery.",
+  "type": "module",
+  "license": "MIT",
+  "author": {
+    "name": "Khaled AbuShqear",
+    "email": "qmax93@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shqear93/openclaw-whatsapp-cloud.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shqear93/openclaw-whatsapp-cloud/issues"
+  },
+  "homepage": "https://github.com/shqear93/openclaw-whatsapp-cloud#readme",
+  "keywords": [
+    "openclaw",
+    "openclaw-plugin",
+    "whatsapp",
+    "whatsapp-cloud-api",
+    "meta",
+    "chatbot",
+    "ai-agent"
+  ],
+  "files": [
+    "dist",
+    "src",
+    "index.ts",
+    "setup-entry.ts",
+    "openclaw.plugin.json",
+    "README.md",
+    "ARCHITECTURE.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "openclaw": "2026.5.27",
+    "typebox": "1.1.38"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "setupEntry": "./setup-entry.ts",
+    "channel": {
+      "id": "whatsapp-cloud",
+      "label": "WhatsApp Cloud",
+      "selectionLabel": "WhatsApp (Meta Cloud API)",
+      "detailLabel": "Meta WhatsApp Business Cloud API",
+      "docsPath": "/channels/whatsapp-cloud",
+      "docsLabel": "whatsapp-cloud",
+      "blurb": "Meta's official WhatsApp Business Cloud API, with inbound webhooks and outbound replies including images.",
+      "order": 90,
+      "quickstartAllowFrom": true
+    },
+    "compat": {
+      "pluginApi": ">=2026.5.27"
+    },
+    "build": {
+      "openclawVersion": "2026.5.27",
+      "bundledDist": false
+    },
+    "install": {
+      "defaultChoice": "local"
+    }
+  }
+}

@@ -1,0 +1,32 @@
+name: Bug Report
+description: Report something that isn't working as expected
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what actually happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Please redact access tokens, phone numbers, and any other secrets.
+      render: shell
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+    validations:
+      required: true
+
+  - type: input
+    id: openclaw-version
+    attributes:
+      label: OpenClaw version
+    validations:
+      required: true

@@ -1,0 +1,54 @@
+{
+  "id": "whatsapp-cloud",
+  "name": "WhatsApp Cloud",
+  "description": "Meta WhatsApp Business Cloud API channel plugin for OpenClaw.",
+  "activation": { "onStartup": false },
+  "channels": ["whatsapp-cloud"],
+  "contracts": {
+    "tools": [
+      "generate_image_for_whatsapp",
+      "send_text_reply_for_whatsapp",
+      "send_voice_reply_for_whatsapp"
+    ]
+  },
+  "channelEnvVars": {
+    "whatsapp-cloud": [
+      "WHATSAPP_ACCESS_TOKEN",
+      "WHATSAPP_PHONE_NUMBER_ID",
+      "WHATSAPP_APP_SECRET",
+      "WHATSAPP_VERIFY_TOKEN",
+      "OPENROUTER_API_KEY",
+      "DEEPGRAM_API_KEY",
+      "CARTESIA_API_KEY",
+      "WHATSAPP_STT_MODEL",
+      "WHATSAPP_STT_LANGUAGE",
+      "WHATSAPP_TTS_LANGUAGE",
+      "WHATSAPP_CARTESIA_MODEL",
+      "WHATSAPP_CARTESIA_VOICE_ID"
+    ]
+  },
+  "configSchema": { "type": "object", "additionalProperties": false, "properties": {} },
+  "channelConfigs": {
+    "whatsapp-cloud": {
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "dmPolicy": {
+            "type": "string",
+            "enum": ["pairing", "allowlist", "open", "disabled"],
+            "default": "pairing"
+          },
+          "allowFrom": {
+            "type": "array",
+            "items": { "anyOf": [{ "type": "string" }, { "type": "number" }] }
+          }
+        },
+        "additionalProperties": false
+      },
+      "label": "WhatsApp Cloud",
+      "description": "Meta WhatsApp Business Cloud API channel configuration, including DM access policy and allowlisted senders."
+    }
+  }
+}
