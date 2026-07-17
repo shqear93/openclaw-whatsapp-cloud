@@ -499,6 +499,29 @@ sequenceDiagram
     MC-->>MsgTool: WhatsApp image message delivered
 ```
 
+*Why not OpenClaw's native `image_generate` tool:* it fully supports LiteLLM as a
+provider (`litellm/<model>`, e.g. `litellm/pollinations-image`) with a per-call
+`model` override, so no separate LiteLLM integration would technically be
+needed. It was deliberately not used, though, because it's asynchronous —
+OpenClaw queues a background task, returns immediately, and later "wakes" the
+requester's session with a `task_completion` internal event, expecting the
+completion agent to call the `message` tool once woken. For a webhook-driven
+channel like this one (no live connection to hold open across that gap), the
+reliability of that wake genuinely depends on OpenClaw's own durable-delivery
+machinery for it -- and as of this writing that machinery is still being
+actively hardened: a real fix for it
+(`fix(agents): wake owning session after generated-media direct delivery`,
+commit `15a304d6`, 2026-07-15) exists only in the `v2026.7.2-beta.2`
+prerelease, not yet in the latest stable `v2026.7.1` (2026-07-13) -- confirmed
+via `gh api repos/openclaw/openclaw/compare/v2026.7.1...15a304d6` returning
+`diverged` and the same compare against the beta tag returning `behind`. The
+installed OpenClaw version this plugin targets (2026.5.27) predates all of
+this hardening by about two months, so it would rely on an even thinner
+version of the same mechanism (a text-only failure fallback, no durable
+queue, no retry). Revisit this once the durable handoff lands in a stable
+release; the synchronous custom-tool path here isn't a workaround for a
+missing feature, it's what's actually appropriate given what's stable today.
+
 ### 3.3 Voice replies
 
 - **Invocation — `channel.ts`'s `send_voice_reply_for_whatsapp` tool.**
