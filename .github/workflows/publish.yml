@@ -35,9 +35,15 @@ jobs:
       - name: Build
         run: npm run build
 
-      # npm 11.5.1+ (bundled with Node 20 LTS as of this workflow) supports
-      # OIDC Trusted Publishing: no long-lived NPM_TOKEN secret, and immune to
-      # npm's 2026-08/2027-01 deprecation of 2FA-bypass tokens for CI publish
+      # Node 20's bundled npm (10.x) predates OIDC Trusted Publishing support
+      # -- confirmed live: without this upgrade, `npm publish` silently fails
+      # to attach the OIDC token and gets a misleading 404 from the registry
+      # instead of an auth error. Trusted Publishing needs npm >= 11.5.1.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
+      # No long-lived NPM_TOKEN secret, and immune to npm's 2026-08/2027-01
+      # deprecation of 2FA-bypass tokens for CI publish
       # (https://github.blog/changelog/2026-07-08-npm-install-time-security-and-gat-bypass2fa-deprecation/).
       # Requires the package's Trusted Publisher configured on npmjs.com to
       # point at this repo + this workflow file first.
