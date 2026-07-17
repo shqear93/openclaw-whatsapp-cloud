@@ -35,6 +35,13 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Confirmed load-bearing, twice: removing this reintroduces the exact
+      # misleading-404 OIDC failure below. Node 22's bundled npm is not
+      # sufficient for Trusted Publishing on its own -- do not remove without
+      # re-testing a real publish first.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
       # No long-lived NPM_TOKEN secret, and immune to npm's 2026-08/2027-01
       # deprecation of 2FA-bypass tokens for CI publish
       # (https://github.blog/changelog/2026-07-08-npm-install-time-security-and-gat-bypass2fa-deprecation/).
