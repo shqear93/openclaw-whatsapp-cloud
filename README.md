@@ -4,7 +4,7 @@
 [![Release Please](https://github.com/shqear93/openclaw-whatsapp-cloud/actions/workflows/release-please.yml/badge.svg)](https://github.com/shqear93/openclaw-whatsapp-cloud/actions/workflows/release-please.yml)
 [![npm version](https://img.shields.io/npm/v/openclaw-whatsapp-cloud.svg)](https://www.npmjs.com/package/openclaw-whatsapp-cloud)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](https://nodejs.org)
 
 A production-grade [OpenClaw](https://github.com/openclaw/openclaw) channel plugin that connects your OpenClaw agent to Meta's **WhatsApp Business Cloud API** — inbound webhooks, outbound replies (text, voice, images), and an agent-driven delivery model instead of naive auto-reply.
 

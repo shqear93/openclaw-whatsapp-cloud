@@ -14,7 +14,7 @@ mise run install    # npm ci
 mise run test
 ```
 
-Without mise, plain `npm ci && npm test` on Node.js 20+ works the same.
+Without mise, plain `npm ci && npm test` on Node.js 22+ works the same.
 
 Run `mise tasks` to see everything available (`install`, `test`, `typecheck`, `build`, `push-ci-secrets`).
 

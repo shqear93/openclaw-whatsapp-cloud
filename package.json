@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Meta WhatsApp Business Cloud API channel plugin for OpenClaw — inbound/outbound messaging, voice notes (STT/TTS), image generation, and tool-based reply delivery.",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "license": "MIT",
   "author": {
     "name": "Khaled AbuShqear",

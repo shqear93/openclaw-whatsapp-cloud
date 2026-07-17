@@ -23,13 +23,6 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name || inputs.tag }}
 
-      # OIDC Trusted Publishing needs npm >= 11.5.1, which in turn needs a
-      # newer Node than this package's own Node 20 baseline (npm@latest
-      # refuses to install on Node 20 at all: confirmed live, EBADENGINE,
-      # "Required: node ^22.22.2 || ^24.15.0 || >=26.0.0"). This bump is a
-      # publish-tooling requirement only -- it doesn't change what Node
-      # version the package itself targets (see ci.yml / .mise.toml, both
-      # still Node 20).
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
@@ -41,9 +34,6 @@ jobs:
 
       - name: Build
         run: npm run build
-
-      - name: Upgrade npm
-        run: npm install -g npm@latest
 
       # No long-lived NPM_TOKEN secret, and immune to npm's 2026-08/2027-01
       # deprecation of 2FA-bypass tokens for CI publish

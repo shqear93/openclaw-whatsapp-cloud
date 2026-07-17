@@ -1,5 +1,5 @@
 [tools]
-node = "20"
+node = "22"
 
 [env]
 GITHUB_REPO = "shqear93/openclaw-whatsapp-cloud"
