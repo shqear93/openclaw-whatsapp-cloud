@@ -1,0 +1,41 @@
+[tools]
+node = "20"
+
+[env]
+GITHUB_REPO = "shqear93/openclaw-whatsapp-cloud"
+
+[tasks.install]
+description = "Install dependencies"
+run = "npm ci"
+
+[tasks.test]
+description = "Run the test suite"
+run = "npm test"
+
+[tasks.typecheck]
+description = "Typecheck the project"
+run = "npm run typecheck"
+
+[tasks.build]
+description = "Build dist/"
+run = "npm run build"
+
+[tasks.push-ci-secrets]
+description = "Push individual CI secrets from .env.github-secrets. For file-based secrets (keys ending in _KEY or _PEM), set the value to the file path (e.g. VPS_SSH_KEY=~/.ssh/id_rsa)"
+run = """
+FILE="${1:-.env.github-secrets}"
+if [[ ! -s "$FILE" ]]; then echo "Missing or empty: $FILE" >&2; exit 1; fi
+while IFS= read -r line || [[ -n "$line" ]]; do
+  [[ "$line" =~ ^[[:space:]]*# || -z "${line// }" ]] && continue
+  key="${line%%=*}"
+  value="${line#*=}"
+  [[ -z "$value" ]] && { echo "Skipping $key (empty value)" >&2; continue; }
+  if [[ "$key" == *_KEY || "$key" == *_PEM ]]; then
+    expanded=$(eval echo "$value")
+    gh secret set "$key" --repo "${GITHUB_REPO}" < "$expanded"
+  else
+    gh secret set "$key" --body "$value" --repo "${GITHUB_REPO}"
+  fi
+  echo "Set $key"
+done < "$FILE"
+"""

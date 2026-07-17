@@ -4,20 +4,25 @@ Thanks for considering a contribution to `openclaw-whatsapp-cloud`.
 
 ## Getting set up
 
+This project uses [mise](https://mise.jdx.dev) to pin the Node version and provide task shortcuts. Install it, then:
+
 ```bash
 git clone https://github.com/shqear93/openclaw-whatsapp-cloud.git
 cd openclaw-whatsapp-cloud
-npm install
-npm test
+mise install       # installs the pinned Node version
+mise run install    # npm ci
+mise run test
 ```
 
-You'll need Node.js 20+.
+Without mise, plain `npm ci && npm test` on Node.js 20+ works the same.
+
+Run `mise tasks` to see everything available (`install`, `test`, `typecheck`, `build`, `push-ci-secrets`).
 
 ## Making changes
 
 - Keep changes focused — one logical change per PR.
 - Add or update tests for any behavior change. The suite is the safety net for a plugin that talks to a real, external, rate-limited API; untested changes here are risky in a way they might not be elsewhere.
-- Run `npm test` and `npm run typecheck` before opening a PR.
+- Run `mise run test` and `mise run typecheck` before opening a PR.
 - If your change affects the plugin's design or delivery model, update [`ARCHITECTURE.md`](./ARCHITECTURE.md) alongside the code — it's meant to always reflect the as-built system, not the original intent.
 
 ## Commit messages

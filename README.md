@@ -94,12 +94,17 @@ Grant your agent the tools it needs:
 
 ## Development
 
+Uses [mise](https://mise.jdx.dev) to pin the Node version and provide task shortcuts:
+
 ```bash
-npm install
-npm test          # run the full suite
-npm run typecheck
-npm run build
+mise install
+mise run install   # npm ci
+mise run test      # run the full suite
+mise run typecheck
+mise run build
 ```
+
+Plain `npm ci && npm test` works the same without mise. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for details.
 
 ## License
 
