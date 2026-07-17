@@ -199,9 +199,15 @@ function getDeepgramClient(sttModel: string): DeepgramClient {
 }
 
 /**
- * Voice-note inbound leg: download the audio bytes from Meta and save them
- * to the sandboxed managed-media directory, handing back a local file path
- * for `inbound.ts` to set on the turn's native `media` attachment facts.
+ * Inbound media leg (voice notes and images): download the bytes from Meta
+ * and save them to the sandboxed managed-media directory, handing back a
+ * local file path for `inbound.ts` to set on the turn's native `media`
+ * attachment facts. Generic across media kinds -- there's nothing
+ * audio-specific in this function itself, only in how `inbound.ts` uses its
+ * result (voice notes get a synchronous transcription pass alongside this;
+ * images don't need one, since OpenClaw's own native image-understanding
+ * pipeline handles the `"image"` capability correctly out of the box, unlike
+ * the `"audio"` capability's `activeModel` override bug documented below).
  *
  * This replaces the previous bespoke inline-transcription approach (download
  * via `meta-client.ts` then run it straight through `speech.ts`'s custom
@@ -241,7 +247,7 @@ function getDeepgramClient(sttModel: string): DeepgramClient {
  * `downloadMedia` (its own 30s `AbortSignal.timeout` per request) -- that
  * part of the old flow was never the problem and stays as-is.
  */
-export async function downloadWhatsappCloudVoiceNoteMedia(
+export async function downloadWhatsappCloudInboundMedia(
   params: { mediaId: string },
 ): Promise<{ path: string; contentType: string }> {
   const { bytes, mimeType } = await lazyMetaClient.downloadMedia(params.mediaId);
@@ -525,8 +531,9 @@ export function registerFull(api: any): void {
         sendReaction: async (params) => {
           await lazyMetaClient.sendReaction(params);
         },
-        downloadVoiceNoteMedia: downloadWhatsappCloudVoiceNoteMedia,
+        downloadVoiceNoteMedia: downloadWhatsappCloudInboundMedia,
         transcribeVoiceNoteMedia: createWhatsappCloudVoiceNoteTranscriber(api.config),
+        downloadImageMedia: downloadWhatsappCloudInboundMedia,
       }).catch((err: unknown) => {
         api.logger?.error?.(`WhatsApp Cloud dispatch failed: ${String(err)}`);
       });

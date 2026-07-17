@@ -190,7 +190,7 @@ export async function dispatchWhatsappInboundEvent(params: {
    * the proven old-bridge behavior this replicates for the outbound leg):
    * `downloadVoiceNoteMedia` downloads the inbound audio from Meta and saves
    * it to the sandboxed media directory (see `channel.ts`'s
-   * `downloadWhatsappCloudVoiceNoteMedia`), handing back a local file path.
+   * `downloadWhatsappCloudInboundMedia`), handing back a local file path.
    * `ingest` sets that path on the turn's native `media` attachment facts so
    * OpenClaw's OWN turn kernel still transcribes it automatically via the
    * bundled `deepgram` extension as a fallback/observability path, under the
@@ -261,6 +261,26 @@ export async function dispatchWhatsappInboundEvent(params: {
     filePath: string;
     contentType?: string;
   }) => Promise<{ text?: string }>;
+  /**
+   * Inbound image support: downloads the image bytes from Meta and saves
+   * them to the sandboxed media directory (see `channel.ts`'s
+   * `downloadWhatsappCloudInboundMedia`, the same generic helper voice notes
+   * use), handing back a local file path that `ingest` sets on the turn's
+   * native `media` attachment facts with `kind: "image"`. Unlike voice notes,
+   * there is no separate synchronous "understanding" pass here: OpenClaw's
+   * own native image-understanding pipeline handles the `"image"` capability
+   * correctly out of the box (its `activeModel` override is honored,
+   * confirmed by reading the installed package's `resolveActiveModelEntry`
+   * -- unlike the `"audio"` capability's confirmed bug, see
+   * `createWhatsappCloudVoiceNoteTranscriber`'s doc comment), so there's
+   * nothing here to work around.
+   *
+   * Any caption Meta sends alongside the image becomes the turn's
+   * `rawText`/`textForAgent`/`textForCommands`, exactly like a plain text
+   * message -- an image with no caption yields an empty string, same as a
+   * voice note with no successful transcript.
+   */
+  downloadImageMedia?: (params: { mediaId: string }) => Promise<{ path: string; contentType: string }>;
 }): Promise<void> {
   const {
     cfg,
@@ -272,6 +292,7 @@ export async function dispatchWhatsappInboundEvent(params: {
     sendReaction,
     downloadVoiceNoteMedia,
     transcribeVoiceNoteMedia,
+    downloadImageMedia,
   } = params;
   const sender = event.sender;
   const sessionKey = sessionKeyFor(sender);
@@ -424,6 +445,33 @@ export async function dispatchWhatsappInboundEvent(params: {
                   // an empty/failed transcription should still leave the
                   // framework's own fallback path free to try.
                   transcribed: transcript.length > 0,
+                },
+              ] satisfies InboundMediaFact[],
+            };
+          }
+
+          if (raw.type === "image" && raw.imageMediaId) {
+            // No download wiring configured -- drop the turn cleanly rather
+            // than throwing, mirroring the voice-note behavior above.
+            if (!downloadImageMedia) {
+              return null;
+            }
+            const media = await downloadImageMedia({ mediaId: raw.imageMediaId });
+            const caption = raw.caption ?? "";
+
+            return {
+              id: raw.messageId ?? `${raw.sender}-${Date.now()}`,
+              timestamp: Date.now(),
+              rawText: caption,
+              textForAgent: caption,
+              textForCommands: caption,
+              raw,
+              media: [
+                {
+                  path: media.path,
+                  contentType: media.contentType,
+                  kind: "image",
+                  messageId: raw.messageId,
                 },
               ] satisfies InboundMediaFact[],
             };

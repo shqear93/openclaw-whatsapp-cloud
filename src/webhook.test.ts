@@ -244,6 +244,75 @@ describe("parseMetaWebhookPayload", () => {
     ]);
   });
 
+  it("extracts an image message event with a caption", () => {
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: "15551234567",
+                    id: "wamid.image123",
+                    type: "image",
+                    image: { id: "media-img-abc", caption: "check this out" },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const events = parseMetaWebhookPayload(payload);
+
+    expect(events).toEqual([
+      {
+        sender: "15551234567",
+        type: "image",
+        imageMediaId: "media-img-abc",
+        caption: "check this out",
+        messageId: "wamid.image123",
+      },
+    ]);
+  });
+
+  it("extracts an image message event with no caption", () => {
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: "15551234567",
+                    id: "wamid.image456",
+                    type: "image",
+                    image: { id: "media-img-def" },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const events = parseMetaWebhookPayload(payload);
+
+    expect(events).toEqual([
+      {
+        sender: "15551234567",
+        type: "image",
+        imageMediaId: "media-img-def",
+        messageId: "wamid.image456",
+      },
+    ]);
+  });
+
   it("silently drops a message with an unsupported type", () => {
     const payload = {
       entry: [

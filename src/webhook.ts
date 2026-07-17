@@ -4,9 +4,11 @@ import { verifyMetaSignature } from "./signature.js";
 
 export type MetaWebhookEvent = {
   sender: string;
-  type: "text" | "audio";
+  type: "text" | "audio" | "image";
   text?: string;
   audioMediaId?: string;
+  imageMediaId?: string;
+  caption?: string;
   messageId?: string;
 };
 
@@ -147,12 +149,21 @@ export function parseMetaWebhookPayload(payload: unknown): MetaWebhookEvent[] {
           type?: string;
           text?: { body?: string };
           audio?: { id?: string };
+          image?: { id?: string; caption?: string };
         };
         if (!msg.from) continue;
         if (msg.type === "text" && msg.text?.body) {
           events.push({ sender: msg.from, type: "text", text: msg.text.body, messageId: msg.id });
         } else if (msg.type === "audio" && msg.audio?.id) {
           events.push({ sender: msg.from, type: "audio", audioMediaId: msg.audio.id, messageId: msg.id });
+        } else if (msg.type === "image" && msg.image?.id) {
+          events.push({
+            sender: msg.from,
+            type: "image",
+            imageMediaId: msg.image.id,
+            ...(msg.image.caption ? { caption: msg.image.caption } : {}),
+            messageId: msg.id,
+          });
         }
       }
     }

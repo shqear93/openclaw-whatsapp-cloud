@@ -101,13 +101,13 @@ describe("WhatsApp Cloud voice-note wiring", () => {
     delete process.env.WHATSAPP_CARTESIA_VOICE_ID;
   });
 
-  it("downloadWhatsappCloudVoiceNoteMedia downloads media from Meta and saves it to the sandboxed inbound media dir", async () => {
+  it("downloadWhatsappCloudInboundMedia downloads media from Meta and saves it to the sandboxed inbound media dir", async () => {
     downloadMediaMock.mockResolvedValue({ bytes: new Uint8Array([1, 2, 3]), mimeType: "audio/ogg" });
     saveMediaBufferMock.mockResolvedValue({ path: "/sandbox/media/inbound/abc.ogg", contentType: "audio/ogg" });
 
-    const { downloadWhatsappCloudVoiceNoteMedia } = await import("./channel.js");
+    const { downloadWhatsappCloudInboundMedia } = await import("./channel.js");
 
-    const media = await downloadWhatsappCloudVoiceNoteMedia({ mediaId: "media-1" });
+    const media = await downloadWhatsappCloudInboundMedia({ mediaId: "media-1" });
 
     expect(downloadMediaMock).toHaveBeenCalledWith("media-1");
     expect(saveMediaBufferMock).toHaveBeenCalledWith(Buffer.from([1, 2, 3]), "audio/ogg", "inbound");
@@ -214,11 +214,11 @@ describe("WhatsApp Cloud voice-note wiring", () => {
     );
   });
 
-  it("registerFull wires downloadWhatsappCloudVoiceNoteMedia/transcribeVoiceNoteMedia into dispatchWhatsappInboundEvent (voice sending is now tool-only, no longer passed to inbound.ts)", async () => {
+  it("registerFull wires downloadWhatsappCloudInboundMedia/transcribeVoiceNoteMedia into dispatchWhatsappInboundEvent (voice sending is now tool-only, no longer passed to inbound.ts)", async () => {
     process.env.WHATSAPP_VERIFY_TOKEN = "verify-token";
     process.env.WHATSAPP_APP_SECRET = "app-secret";
 
-    const { registerFull, downloadWhatsappCloudVoiceNoteMedia } = await import("./channel.js");
+    const { registerFull, downloadWhatsappCloudInboundMedia } = await import("./channel.js");
 
     const fakeApi = {
       config: {},
@@ -235,7 +235,8 @@ describe("WhatsApp Cloud voice-note wiring", () => {
 
     expect(dispatchWhatsappInboundEventMock).toHaveBeenCalledTimes(1);
     const dispatchParams = dispatchWhatsappInboundEventMock.mock.calls[0][0];
-    expect(dispatchParams.downloadVoiceNoteMedia).toBe(downloadWhatsappCloudVoiceNoteMedia);
+    expect(dispatchParams.downloadVoiceNoteMedia).toBe(downloadWhatsappCloudInboundMedia);
+    expect(dispatchParams.downloadImageMedia).toBe(downloadWhatsappCloudInboundMedia);
     expect(dispatchParams.sendVoiceReply).toBeUndefined();
     expect(typeof dispatchParams.transcribeVoiceNoteMedia).toBe("function");
   });

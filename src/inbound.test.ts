@@ -562,6 +562,104 @@ describe("dispatchWhatsappInboundEvent", () => {
     });
   });
 
+  describe("images", () => {
+    it("downloads an inbound image event via downloadImageMedia and sets its local path on the turn's native media attachment facts; an image with no caption yields an empty rawText", async () => {
+      const { runInbound, buildContext, channelRuntime } = makeChannelRuntime();
+      const downloadImageMedia = vi
+        .fn()
+        .mockResolvedValue({ path: "/sandbox/media/inbound/photo.jpg", contentType: "image/jpeg" });
+
+      const event: MetaWebhookEvent = {
+        sender: ALLOWED_SENDER,
+        type: "image",
+        imageMediaId: "media.img.1",
+        messageId: "wamid.3",
+      };
+
+      await dispatchWhatsappInboundEvent({
+        cfg: makeAllowlistCfg(),
+        event,
+        channelRuntime,
+        sendText: vi.fn(),
+        downloadImageMedia,
+      });
+
+      const call = runInbound.mock.calls[0][0];
+      const input = await call.adapter.ingest(event);
+
+      expect(downloadImageMedia).toHaveBeenCalledWith({ mediaId: "media.img.1" });
+      expect(input.rawText).toBe("");
+      expect(input.textForAgent).toBe("");
+      expect(input.id).toBe("wamid.3");
+      expect(input.media).toEqual([
+        {
+          path: "/sandbox/media/inbound/photo.jpg",
+          contentType: "image/jpeg",
+          kind: "image",
+          messageId: "wamid.3",
+        },
+      ]);
+
+      const resolved = await call.adapter.resolveTurn(input, { kind: "message", canStartAgentTurn: true }, {});
+      expect(resolved).toBeDefined();
+      const buildContextCall = buildContext.mock.calls[0][0];
+      expect(buildContextCall.media).toEqual(input.media);
+    });
+
+    it("uses the image's caption as rawText/textForAgent/textForCommands when present", async () => {
+      const { runInbound, channelRuntime } = makeChannelRuntime();
+      const downloadImageMedia = vi
+        .fn()
+        .mockResolvedValue({ path: "/sandbox/media/inbound/photo.jpg", contentType: "image/jpeg" });
+
+      const event: MetaWebhookEvent = {
+        sender: ALLOWED_SENDER,
+        type: "image",
+        imageMediaId: "media.img.2",
+        caption: "check this out",
+        messageId: "wamid.4",
+      };
+
+      await dispatchWhatsappInboundEvent({
+        cfg: makeAllowlistCfg(),
+        event,
+        channelRuntime,
+        sendText: vi.fn(),
+        downloadImageMedia,
+      });
+
+      const call = runInbound.mock.calls[0][0];
+      const input = await call.adapter.ingest(event);
+
+      expect(input.rawText).toBe("check this out");
+      expect(input.textForAgent).toBe("check this out");
+      expect(input.textForCommands).toBe("check this out");
+    });
+
+    it("drops the turn cleanly when no downloadImageMedia callback is configured", async () => {
+      const { runInbound, channelRuntime } = makeChannelRuntime();
+
+      const event: MetaWebhookEvent = {
+        sender: ALLOWED_SENDER,
+        type: "image",
+        imageMediaId: "media.img.3",
+        messageId: "wamid.5",
+      };
+
+      await dispatchWhatsappInboundEvent({
+        cfg: makeAllowlistCfg(),
+        event,
+        channelRuntime,
+        sendText: vi.fn(),
+      });
+
+      const call = runInbound.mock.calls[0][0];
+      const input = await call.adapter.ingest(event);
+
+      expect(input).toBeNull();
+    });
+  });
+
   it("delivers a control-command reply (e.g. /reset) as plain text, unwrapped -- never flagged as a fallback", async () => {
     // Regression test: control commands are handled by the framework
     // BEFORE the agent ever runs, so there is no opportunity for

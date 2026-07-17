@@ -205,19 +205,30 @@ sequenceDiagram
 
 - **Text**: no download/transcription step; `rawText` flows straight from
   the webhook payload into the turn.
-- **Audio** (voice notes): `downloadVoiceNoteMedia` (wired in `channel.ts`
-  as `downloadWhatsappCloudVoiceNoteMedia`) downloads the audio bytes from
-  Meta via `meta-client.ts`'s `downloadMedia` and saves them to the
-  sandboxed managed-media directory via `saveMediaBuffer(..., "inbound")`,
-  handing back a local file `path`. A local path (`MediaPath`), not a
-  remote URL, is used deliberately: Meta's media download URLs require the
-  app's Bearer access token, and the framework's own remote-media fetch for
-  `MediaUrl` (`readRemoteMediaBuffer`) does not support attaching custom
-  auth headers.
-- **Image** (outbound only — WhatsApp Cloud API inbound image messages are
-  not consumed by this plugin at all; `parseMetaWebhookPayload` only
-  recognizes `text`/`audio` message types). Outbound image generation is
-  covered in §3.2.
+- **Audio** (voice notes) and **inbound image** both download via the same
+  generic helper, `channel.ts`'s `downloadWhatsappCloudInboundMedia` (wired
+  in `inbound.ts` as `downloadVoiceNoteMedia`/`downloadImageMedia`
+  respectively) — it downloads the bytes from Meta via `meta-client.ts`'s
+  `downloadMedia` and saves them to the sandboxed managed-media directory
+  via `saveMediaBuffer(..., "inbound")`, handing back a local file `path`.
+  A local path (`MediaPath`), not a remote URL, is used deliberately: Meta's
+  media download URLs require the app's Bearer access token, and the
+  framework's own remote-media fetch for `MediaUrl` (`readRemoteMediaBuffer`)
+  does not support attaching custom auth headers.
+  - **Audio** additionally gets a synchronous transcription pass
+    (`transcribeVoiceNoteMedia`, §2.2) before the framework's own native
+    understanding pipeline runs, because that pipeline's `activeModel`
+    override is confirmed broken for the `"audio"` capability (see
+    `createWhatsappCloudVoiceNoteTranscriber`'s doc comment).
+  - **Image** gets none of that: OpenClaw's native image-understanding
+    pipeline honors `activeModel` correctly out of the box for the
+    `"image"` capability, so the downloaded file is just handed to the
+    turn as a native `media` fact (`kind: "image"`) with no bespoke
+    understanding step needed. Any caption Meta sends alongside the image
+    becomes the turn's `rawText`/`textForAgent`/`textForCommands`, same as
+    a plain text message; no caption yields an empty string.
+  - Outbound image generation (a distinct, unrelated tool) is covered in
+    §3.2.
 
 ### 2.4 Reply delivery — agent-driven, not automatic
 
@@ -883,12 +894,9 @@ are genuinely free.
   upstream-model-quality limitation independent of the language-detection
   fix above — not something to re-solve at the plugin layer.
 - **Documents and video are not supported.** `parseMetaWebhookPayload` only
-  recognizes `text`/`audio` inbound message types; there is no outbound
-  document/video delivery path either. `AGENTS.md` tells the agent to
-  describe such things in words instead.
-- **Inbound WhatsApp image messages are not consumed.** Only image
-  *generation* (outbound) is supported; a user sending WhatsApp an image is
-  not currently a handled inbound event type.
+  recognizes `text`/`audio`/`image` inbound message types; there is no
+  outbound document/video delivery path either. `AGENTS.md` tells the agent
+  to describe such things in words instead.
 - **AI Horde fallback latency is inherently variable.** Anonymous-tier jobs
   are low scheduling priority and can take minutes; the 180s deployment
   timeout and the handler's own 170s poll ceiling are tuned around observed
