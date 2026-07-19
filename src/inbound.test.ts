@@ -658,6 +658,37 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       expect(input).toBeNull();
     });
+
+    it("marks an inbound image message as read and starts the typing indicator, same as text/audio", async () => {
+      // Regression test: markAsRead's event-type gate originally only
+      // covered "text"/"audio" -- a real production gap, not hypothetical:
+      // a real image turn showed neither the read receipt nor any typing
+      // indicator at all, since keepTypingIndicatorAlive only refreshes an
+      // already-started indicator; it never sends the first one itself.
+      const { runInbound, channelRuntime } = makeChannelRuntime();
+      const downloadImageMedia = vi
+        .fn()
+        .mockResolvedValue({ path: "/sandbox/media/inbound/photo.jpg", contentType: "image/jpeg" });
+      const markAsRead = vi.fn().mockResolvedValue(undefined);
+
+      const event: MetaWebhookEvent = {
+        sender: ALLOWED_SENDER,
+        type: "image",
+        imageMediaId: "media.img.4",
+        messageId: "wamid.6",
+      };
+
+      await dispatchWhatsappInboundEvent({
+        cfg: makeAllowlistCfg(),
+        event,
+        channelRuntime,
+        sendText: vi.fn(),
+        downloadImageMedia,
+        markAsRead,
+      });
+
+      expect(markAsRead).toHaveBeenCalledWith({ messageId: "wamid.6", typing: true });
+    });
   });
 
   it("delivers a control-command reply (e.g. /reset) as plain text, unwrapped -- never flagged as a fallback", async () => {

@@ -343,8 +343,13 @@ export async function dispatchWhatsappInboundEvent(params: {
   // Voice notes are the slowest path in the plugin (Meta media download +
   // Deepgram STT + full agent turn + Cartesia TTS + Meta upload), so this
   // rationale applies even more strongly to them than to text -- hence
-  // `audio` is included here alongside `text`, not just `text`.
-  if (markAsRead && (event.type === "text" || event.type === "audio") && event.messageId) {
+  // `audio` is included here alongside `text`, not just `text`. `image` is
+  // included for the same reason: a real production gap, not a hypothetical
+  // one -- confirmed live, a real image turn showed neither the read
+  // receipt nor any typing indicator at all, since `keepTypingIndicatorAlive`
+  // below only refreshes an already-started indicator (its first refresh
+  // isn't due for TYPING_INDICATOR_REFRESH_MS), it never sends the first one.
+  if (markAsRead && (event.type === "text" || event.type === "audio" || event.type === "image") && event.messageId) {
     try {
       await markAsRead({ messageId: event.messageId, typing: true });
     } catch (error) {
