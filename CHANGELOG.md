@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/shqear93/openclaw-whatsapp-cloud/compare/v1.1.0...v1.2.0) (2026-07-17)
+
+
+### Features
+
+* **inbound:** support inbound WhatsApp image messages ([2c18462](https://github.com/shqear93/openclaw-whatsapp-cloud/commit/2c18462b5d27a9dd8e73d66283f529aee4e1eedb))
+
+
+### Bug Fixes
+
+* **ci:** restore the npm upgrade step -- confirmed load-bearing ([856a9cb](https://github.com/shqear93/openclaw-whatsapp-cloud/commit/856a9cb35faa37d79b037c161e4259f4ce71e199))
+
 ## [1.1.0](https://github.com/shqear93/openclaw-whatsapp-cloud/compare/v1.0.0...v1.1.0) (2026-07-17)
 
 
