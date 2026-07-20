@@ -50,7 +50,55 @@ behaviors below are deliberately ported from the old bridge's proven
 behavior (e.g. voice-in-voice-out symmetry, Deepgram STT wiring) even though
 the transport around them changed completely.
 
-### 1.1 System overview
+### 1.1 End-to-end example: one message, start to finish
+
+```mermaid
+flowchart TD
+    A["Sender phone x<br/>(any number in allowFrom)"] -->|WhatsApp message| B["Meta WhatsApp Business number y<br/>(registered in Meta Cloud API)"]
+    B -->|"webhook POST, from: x"| C["webhook.ts<br/>verify signature, parse"]
+    C --> D{"msg.type?"}
+    D -->|text| E["type=text"]
+    D -->|audio| F["type=audio"]
+    D -->|image| G["type=image"]
+    D -->|other/unsupported| X["dropped silently"]
+
+    E --> H["dispatchWhatsappInboundEvent"]
+    F --> H
+    G --> H
+
+    H --> I["resolveWhatsappAccess<br/>checks channels['whatsapp-cloud'].allowFrom"]
+    I --> J{"is x in allowFrom?"}
+    J -->|no, dmPolicy=allowlist| K["rejected / paired-off, no turn started"]
+    J -->|yes| L["adapter.ingest(raw)"]
+
+    L --> M{"event type"}
+    M -->|audio| N["downloadVoiceNoteMedia<br/>via downloadInboundMediaOrNotifyFailure"]
+    M -->|image| O["downloadImageMedia<br/>via downloadInboundMediaOrNotifyFailure"]
+    M -->|text| P["rawText passed through directly"]
+
+    N -->|success| N2["transcribeVoiceNoteMedia<br/>Deepgram nova-3, whisper-large fallback"]
+    N -->|"download fails, e.g. >20MB cap"| N3["sendText: couldn't process that voice note...<br/>turn dropped, ingest returns null"]
+
+    O -->|success| O2["media fact attached, kind=image<br/>caption used as rawText, if present"]
+    O -->|download fails| O3["sendText: couldn't process that image...<br/>turn dropped, ingest returns null"]
+
+    N2 --> Q["markAsRead + typing indicator started"]
+    O2 --> Q
+    P --> Q
+
+    Q --> R["adapter.resolveTurn<br/>buildContext with media facts"]
+    R --> S["Agent turn runs on the configured model"]
+    S --> T{"agent tool call"}
+    T -->|text reply| U["send_text_reply_for_whatsapp"]
+    T -->|voice reply| V["send_voice_reply_for_whatsapp"]
+    T -->|image gen| W["generate_image_for_whatsapp"]
+
+    U --> Y["Meta Cloud API<br/>message sent from y to x"]
+    V --> Y
+    W --> Y
+```
+
+### 1.2 System overview
 
 ```mermaid
 flowchart LR
