@@ -60,6 +60,47 @@ function keepTypingIndicatorAlive(params: {
 }
 
 /**
+ * Wraps an inbound media download (voice note or image) so a failure -- most
+ * concretely, `meta-client.ts`'s `downloadMedia` throwing when a file exceeds
+ * its 20MB cap -- gets a clear reply to the user instead of true silence.
+ *
+ * Confirmed live: a real 41MB audio file caused `downloadVoiceNoteMedia` to
+ * throw (over the cap) from inside `ingest`, uncaught -- unlike the
+ * transcription step just below it, which already had its own try/catch.
+ * That uncaught rejection propagated into the framework with no reply and no
+ * visible error, exactly the "silent failure" class of bug this plugin has
+ * hit before (see the voice-note timeout incident this file's other
+ * comments reference). Returning `null` from `ingest` (this plugin's normal
+ * "drop the turn cleanly" contract) is not enough on its own here: unlike an
+ * unsupported message type, a failed download for a message the user
+ * genuinely sent deserves an explicit reply, not silent disposal.
+ */
+async function downloadInboundMediaOrNotifyFailure(params: {
+  download: () => Promise<{ path: string; contentType: string }>;
+  sender: string;
+  sendText: (params: { to: string; text: string }) => Promise<void>;
+  kind: "voice note" | "image";
+}): Promise<{ path: string; contentType: string } | null> {
+  try {
+    return await params.download();
+  } catch (error) {
+    console.warn(`[whatsapp-cloud] failed to download inbound ${params.kind} for ${params.sender}`, error);
+    try {
+      await params.sendText({
+        to: params.sender,
+        text: `Sorry, I couldn't process that ${params.kind} -- it may be too large or something went wrong downloading it.`,
+      });
+    } catch (sendError) {
+      console.warn(
+        `[whatsapp-cloud] failed to notify ${params.sender} about the ${params.kind} download failure`,
+        sendError,
+      );
+    }
+    return null;
+  }
+}
+
+/**
  * Defense-in-depth deadline around the ENTIRE dispatch chain
  * (`channelRuntime.inbound.run(...)`), not just the voice-note leg that
  * caused the confirmed production incident this commit fixes. The turn
@@ -402,11 +443,20 @@ export async function dispatchWhatsappInboundEvent(params: {
             if (!downloadVoiceNoteMedia) {
               return null;
             }
+            const audioMediaId = raw.audioMediaId;
             // The download-to-sandbox step (already time-bounded, see
             // `meta-client.ts`'s `downloadMedia`) -- the unbounded custom
             // transcription call that caused the original production
             // incident stays removed from this pre-dispatch phase.
-            const media = await downloadVoiceNoteMedia({ mediaId: raw.audioMediaId });
+            const media = await downloadInboundMediaOrNotifyFailure({
+              download: () => downloadVoiceNoteMedia({ mediaId: audioMediaId }),
+              sender: raw.sender,
+              sendText,
+              kind: "voice note",
+            });
+            if (!media) {
+              return null;
+            }
 
             // Transcribe synchronously via the framework's own
             // (timeout-bounded) media-understanding runtime, see
@@ -461,7 +511,16 @@ export async function dispatchWhatsappInboundEvent(params: {
             if (!downloadImageMedia) {
               return null;
             }
-            const media = await downloadImageMedia({ mediaId: raw.imageMediaId });
+            const imageMediaId = raw.imageMediaId;
+            const media = await downloadInboundMediaOrNotifyFailure({
+              download: () => downloadImageMedia({ mediaId: imageMediaId }),
+              sender: raw.sender,
+              sendText,
+              kind: "image",
+            });
+            if (!media) {
+              return null;
+            }
             const caption = raw.caption ?? "";
 
             return {

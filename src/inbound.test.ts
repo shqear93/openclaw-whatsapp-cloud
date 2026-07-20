@@ -262,16 +262,17 @@ describe("dispatchWhatsappInboundEvent", () => {
       expect(input.media[0].transcribed).toBe(false);
     });
 
-    it("lets a download failure propagate out of ingest so the outer catch sends the standard error reply", async () => {
+    it("catches a download failure inside ingest and sends a user-facing reply instead of throwing", async () => {
       const { runInbound, channelRuntime } = makeChannelRuntime();
       const failure = new Error("WhatsApp API rejected media download for media.1: status=500 body=oops");
+      let ingestResult: unknown;
       runInbound.mockImplementation(async (callArgs: any) => {
-        await callArgs.adapter.ingest(callArgs.raw);
+        ingestResult = await callArgs.adapter.ingest(callArgs.raw);
         return { dispatched: true };
       });
       const downloadVoiceNoteMedia = vi.fn().mockRejectedValue(failure);
       const sendText = vi.fn().mockResolvedValue(undefined);
-      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
@@ -288,14 +289,15 @@ describe("dispatchWhatsappInboundEvent", () => {
           sendText,
           downloadVoiceNoteMedia,
         }),
-      ).rejects.toThrow("WhatsApp API rejected media download");
+      ).resolves.not.toThrow();
 
+      expect(ingestResult).toBeNull();
       expect(sendText).toHaveBeenCalledWith({
         to: ALLOWED_SENDER,
-        text: expect.stringContaining("error"),
+        text: expect.stringContaining("voice note"),
       });
 
-      consoleErrorSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
     });
 
     it("durable() always defers text-only final replies to deliver(), regardless of whether the turn was voice- or text-originated", async () => {
@@ -657,6 +659,44 @@ describe("dispatchWhatsappInboundEvent", () => {
       const input = await call.adapter.ingest(event);
 
       expect(input).toBeNull();
+    });
+
+    it("catches a download failure inside ingest and sends a user-facing reply instead of throwing", async () => {
+      const { runInbound, channelRuntime } = makeChannelRuntime();
+      const failure = new Error("WhatsApp API rejected media download for media.img.9: status=500 body=oops");
+      let ingestResult: unknown;
+      runInbound.mockImplementation(async (callArgs: any) => {
+        ingestResult = await callArgs.adapter.ingest(callArgs.raw);
+        return { dispatched: true };
+      });
+      const downloadImageMedia = vi.fn().mockRejectedValue(failure);
+      const sendText = vi.fn().mockResolvedValue(undefined);
+      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      const event: MetaWebhookEvent = {
+        sender: ALLOWED_SENDER,
+        type: "image",
+        imageMediaId: "media.img.9",
+        messageId: "wamid.9",
+      };
+
+      await expect(
+        dispatchWhatsappInboundEvent({
+          cfg: makeAllowlistCfg(),
+          event,
+          channelRuntime,
+          sendText,
+          downloadImageMedia,
+        }),
+      ).resolves.not.toThrow();
+
+      expect(ingestResult).toBeNull();
+      expect(sendText).toHaveBeenCalledWith({
+        to: ALLOWED_SENDER,
+        text: expect.stringContaining("image"),
+      });
+
+      consoleWarnSpy.mockRestore();
     });
 
     it("marks an inbound image message as read and starts the typing indicator, same as text/audio", async () => {
