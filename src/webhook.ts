@@ -10,6 +10,19 @@ export type MetaWebhookEvent = {
   imageMediaId?: string;
   caption?: string;
   messageId?: string;
+  /**
+   * Meta's per-message `context` object carries forwarding/reply metadata
+   * uniformly across all message types (text/audio/image), parsed once in
+   * `parseMetaWebhookPayload` rather than duplicated per branch there. Meta
+   * does NOT expose the *content* of a forwarded/quoted message via the
+   * webhook -- only that forwarding happened, or a reference (id/sender) to
+   * the quoted message -- there is no Cloud API endpoint to fetch an
+   * arbitrary historical message's content by id.
+   */
+  forwarded?: boolean;
+  frequentlyForwarded?: boolean;
+  quotedMessageId?: string;
+  quotedFrom?: string;
 };
 
 const MAX_BODY_BYTES = 1024 * 1024; // 1MB, generous for WhatsApp webhook JSON payloads
@@ -150,12 +163,31 @@ export function parseMetaWebhookPayload(payload: unknown): MetaWebhookEvent[] {
           text?: { body?: string };
           audio?: { id?: string };
           image?: { id?: string; caption?: string };
+          context?: { from?: string; id?: string; forwarded?: boolean; frequently_forwarded?: boolean };
         };
         if (!msg.from) continue;
+        // Forwarding/reply provenance is orthogonal to message type -- Meta
+        // attaches `context` the same way to a forwarded/replied-to text,
+        // audio, or image message, so extract it once here instead of
+        // duplicating this per branch below.
+        const provenance = msg.context
+          ? {
+              ...(msg.context.forwarded ? { forwarded: true } : {}),
+              ...(msg.context.frequently_forwarded ? { frequentlyForwarded: true } : {}),
+              ...(msg.context.id ? { quotedMessageId: msg.context.id } : {}),
+              ...(msg.context.from ? { quotedFrom: msg.context.from } : {}),
+            }
+          : {};
         if (msg.type === "text" && msg.text?.body) {
-          events.push({ sender: msg.from, type: "text", text: msg.text.body, messageId: msg.id });
+          events.push({ sender: msg.from, type: "text", text: msg.text.body, messageId: msg.id, ...provenance });
         } else if (msg.type === "audio" && msg.audio?.id) {
-          events.push({ sender: msg.from, type: "audio", audioMediaId: msg.audio.id, messageId: msg.id });
+          events.push({
+            sender: msg.from,
+            type: "audio",
+            audioMediaId: msg.audio.id,
+            messageId: msg.id,
+            ...provenance,
+          });
         } else if (msg.type === "image" && msg.image?.id) {
           events.push({
             sender: msg.from,
@@ -163,6 +195,7 @@ export function parseMetaWebhookPayload(payload: unknown): MetaWebhookEvent[] {
             imageMediaId: msg.image.id,
             ...(msg.image.caption ? { caption: msg.image.caption } : {}),
             messageId: msg.id,
+            ...provenance,
           });
         }
       }

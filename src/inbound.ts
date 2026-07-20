@@ -167,6 +167,62 @@ function stripLeadingPlus(value: string): string {
 }
 
 /**
+ * Maps Meta's forwarding/reply provenance (parsed once in `webhook.ts`'s
+ * `parseMetaWebhookPayload`, see `MetaWebhookEvent`'s doc comment) onto the
+ * SDK's native `supplemental.forwarded`/`supplemental.quote`/
+ * `untrustedContext` fields (`openclaw`'s `SupplementalContextFacts`) --
+ * the same mechanism every other channel plugin uses for "this content
+ * isn't necessarily the sender's own words," rather than a bespoke one.
+ *
+ * `senderAllowed: true` on both `forwarded` and `quote` is correct
+ * specifically for this channel: whatsapp-cloud is a direct 1:1 surface
+ * (`conversation: { kind: "direct" }` below), and this function only runs
+ * after `resolveWhatsappAccess` has already allowlist-checked `event.sender`
+ * -- so `context.from` on a reply can only be that already-vetted sender or
+ * the bot's own prior message, never an unvetted third party. This would
+ * NOT be a safe default on a group-chat-capable channel.
+ *
+ * Meta's `frequently_forwarded` flag has no dedicated slot in
+ * `SupplementalContextFacts.forwarded` (that shape is about who forwarded
+ * it, not how often) -- it goes into `untrustedContext` instead, the SDK's
+ * general-purpose bucket for exactly this kind of extra untrusted signal.
+ */
+function buildSupplementalContext(event: MetaWebhookEvent):
+  | {
+      forwarded?: { senderAllowed: boolean };
+      quote?: { id: string; sender?: string; senderAllowed: boolean; isQuote: boolean };
+      untrustedContext?: Array<{ label: string; type?: string; payload: unknown }>;
+    }
+  | undefined {
+  const forwarded = event.forwarded ? { senderAllowed: true } : undefined;
+  const quote = event.quotedMessageId
+    ? {
+        id: event.quotedMessageId,
+        ...(event.quotedFrom ? { sender: event.quotedFrom } : {}),
+        senderAllowed: true,
+        isQuote: true,
+      }
+    : undefined;
+  const untrustedContext = event.frequentlyForwarded
+    ? [
+        {
+          label: "WhatsApp forwarding signal",
+          type: "frequently_forwarded",
+          payload: { frequentlyForwarded: true },
+        },
+      ]
+    : undefined;
+  if (!forwarded && !quote && !untrustedContext) {
+    return undefined;
+  }
+  return {
+    ...(forwarded ? { forwarded } : {}),
+    ...(quote ? { quote } : {}),
+    ...(untrustedContext ? { untrustedContext } : {}),
+  };
+}
+
+/**
  * The turn kernel's command gate and this channel's own DM-allowlist
  * enforcement both go through the SDK's shared ingress resolver
  * (`openclaw/plugin-sdk/channel-ingress-runtime`) instead of hand-rolled
@@ -575,6 +631,11 @@ export async function dispatchWhatsappInboundEvent(params: {
             // standard mechanism for inbound audio attachments, not a
             // bespoke one.
             media: input.media,
+            // `event` (not `input`/`raw`) is the original webhook event for
+            // this whole dispatch, closed over from the outer function --
+            // forwarding/reply provenance lives on it regardless of which
+            // `ingest` branch (text/audio/image) built `input`.
+            supplemental: buildSupplementalContext(event),
             access: {
               dm: {
                 decision: auth.senderAccess.decision === "block" ? "deny" : auth.senderAccess.decision,

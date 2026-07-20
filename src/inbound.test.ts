@@ -73,6 +73,147 @@ describe("dispatchWhatsappInboundEvent", () => {
     expect(resolved.routeSessionKey).toBe(`agent:whatsapp:${ALLOWED_SENDER}`);
   });
 
+  describe("forwarding / reply provenance", () => {
+    it("passes supplemental.forwarded to buildContext for a forwarded text message", async () => {
+      const { runInbound, buildContext, channelRuntime } = makeChannelRuntime();
+
+      const event: MetaWebhookEvent = {
+        sender: ALLOWED_SENDER,
+        type: "text",
+        text: "check this out",
+        messageId: "wamid.fwd",
+        forwarded: true,
+      };
+
+      await dispatchWhatsappInboundEvent({
+        cfg: makeAllowlistCfg(),
+        event,
+        channelRuntime,
+        sendText: vi.fn(),
+      });
+
+      const call = runInbound.mock.calls[0][0];
+      const input = await call.adapter.ingest(event);
+      await call.adapter.resolveTurn(input, { kind: "message", canStartAgentTurn: true }, {});
+
+      const buildContextCall = buildContext.mock.calls[0][0];
+      expect(buildContextCall.supplemental).toEqual({ forwarded: { senderAllowed: true } });
+    });
+
+    it("adds an untrustedContext entry for a frequently-forwarded message, alongside supplemental.forwarded", async () => {
+      const { runInbound, buildContext, channelRuntime } = makeChannelRuntime();
+
+      const event: MetaWebhookEvent = {
+        sender: ALLOWED_SENDER,
+        type: "text",
+        text: "share this with everyone",
+        messageId: "wamid.freqfwd",
+        forwarded: true,
+        frequentlyForwarded: true,
+      };
+
+      await dispatchWhatsappInboundEvent({
+        cfg: makeAllowlistCfg(),
+        event,
+        channelRuntime,
+        sendText: vi.fn(),
+      });
+
+      const call = runInbound.mock.calls[0][0];
+      const input = await call.adapter.ingest(event);
+      await call.adapter.resolveTurn(input, { kind: "message", canStartAgentTurn: true }, {});
+
+      const buildContextCall = buildContext.mock.calls[0][0];
+      expect(buildContextCall.supplemental.forwarded).toEqual({ senderAllowed: true });
+      expect(buildContextCall.supplemental.untrustedContext).toEqual([
+        { label: "WhatsApp forwarding signal", type: "frequently_forwarded", payload: { frequentlyForwarded: true } },
+      ]);
+    });
+
+    it("passes supplemental.quote (id + sender, no body -- Meta doesn't expose the quoted message's content) for a reply", async () => {
+      const { runInbound, buildContext, channelRuntime } = makeChannelRuntime();
+
+      const event: MetaWebhookEvent = {
+        sender: ALLOWED_SENDER,
+        type: "text",
+        text: "yes, that one",
+        messageId: "wamid.reply",
+        quotedMessageId: "wamid.original",
+        quotedFrom: ALLOWED_SENDER,
+      };
+
+      await dispatchWhatsappInboundEvent({
+        cfg: makeAllowlistCfg(),
+        event,
+        channelRuntime,
+        sendText: vi.fn(),
+      });
+
+      const call = runInbound.mock.calls[0][0];
+      const input = await call.adapter.ingest(event);
+      await call.adapter.resolveTurn(input, { kind: "message", canStartAgentTurn: true }, {});
+
+      const buildContextCall = buildContext.mock.calls[0][0];
+      expect(buildContextCall.supplemental).toEqual({
+        quote: { id: "wamid.original", sender: ALLOWED_SENDER, senderAllowed: true, isQuote: true },
+      });
+    });
+
+    it("leaves supplemental undefined for a plain message with no forwarding/reply context", async () => {
+      const { runInbound, buildContext, channelRuntime } = makeChannelRuntime();
+
+      const event: MetaWebhookEvent = {
+        sender: ALLOWED_SENDER,
+        type: "text",
+        text: "hi",
+        messageId: "wamid.plain",
+      };
+
+      await dispatchWhatsappInboundEvent({
+        cfg: makeAllowlistCfg(),
+        event,
+        channelRuntime,
+        sendText: vi.fn(),
+      });
+
+      const call = runInbound.mock.calls[0][0];
+      const input = await call.adapter.ingest(event);
+      await call.adapter.resolveTurn(input, { kind: "message", canStartAgentTurn: true }, {});
+
+      const buildContextCall = buildContext.mock.calls[0][0];
+      expect(buildContextCall.supplemental).toBeUndefined();
+    });
+
+    it("carries forwarded provenance through the audio ingest branch too, not just text", async () => {
+      const { runInbound, buildContext, channelRuntime } = makeChannelRuntime();
+
+      const event: MetaWebhookEvent = {
+        sender: ALLOWED_SENDER,
+        type: "audio",
+        audioMediaId: "media.fwd",
+        messageId: "wamid.audiofwd",
+        forwarded: true,
+      };
+
+      const downloadVoiceNoteMedia = vi.fn().mockResolvedValue({ path: "/tmp/audio.ogg", contentType: "audio/ogg" });
+
+      await dispatchWhatsappInboundEvent({
+        cfg: makeAllowlistCfg(),
+        event,
+        channelRuntime,
+        sendText: vi.fn(),
+        downloadVoiceNoteMedia,
+      });
+
+      const call = runInbound.mock.calls[0][0];
+      const input = await call.adapter.ingest(event);
+      await call.adapter.resolveTurn(input, { kind: "message", canStartAgentTurn: true }, {});
+
+      const buildContextCall = buildContext.mock.calls[0][0];
+      expect(buildContextCall.supplemental).toEqual({ forwarded: { senderAllowed: true } });
+    });
+  });
+
   it("returns null from ingest for audio-type events when no downloadVoiceNoteMedia callback is configured", async () => {
     const { runInbound, buildContext, channelRuntime } = makeChannelRuntime();
 

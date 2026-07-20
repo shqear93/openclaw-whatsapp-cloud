@@ -184,6 +184,15 @@ registered by `channel.ts`'s `registerFull` at `/whatsapp-cloud/webhook` via
 - `parseMetaWebhookPayload` extracts one `MetaWebhookEvent` per inbound
   message (`type: "text" | "audio" | "image"`), dropping anything else
   (reactions, status callbacks, unknown message types) silently.
+- Forwarding/reply provenance is parsed here too, from Meta's per-message
+  `context` object, uniformly across all three message types:
+  `context.forwarded`/`context.frequently_forwarded` (booleans — Meta does
+  NOT expose *who* originally forwarded it, by design) and `context.id`/
+  `context.from` (a reply's quoted-message id/sender). Meta's webhook never
+  includes the forwarded/quoted message's actual *content* — there is no
+  Cloud API endpoint to fetch an arbitrary historical message by id — so
+  this is provenance metadata only, not content recovery. See §2.2 for how
+  `inbound.ts` maps it onto the turn kernel's supplemental context.
 - Each parsed event is handed synchronously to `onEvent`, which in
   `registerFull` is a `void`-fired call into `dispatchWhatsappInboundEvent`
   (§2.2) — the webhook responds `200 {"status":"ok"}` immediately without
@@ -289,6 +298,35 @@ attachment; `transcribed: true` is only set once `ingest` already obtained a
 real transcript, so the framework doesn't pay for (and doesn't
 overwrite `Body` with) a redundant second Deepgram call.
 
+**Forwarding/reply provenance → `supplemental`.** The same `buildContext`
+call also passes `supplemental: buildSupplementalContext(event)`
+(`inbound.ts`), mapping the `forwarded`/`frequentlyForwarded`/
+`quotedMessageId`/`quotedFrom` fields parsed in §2.1 onto the SDK's native
+`SupplementalContextFacts` shape — the same mechanism every OpenClaw channel
+plugin uses for "this text isn't necessarily the sender's own words," not a
+bespoke one:
+
+- `event.forwarded` → `supplemental.forwarded = { senderAllowed: true }`.
+- `event.quotedMessageId` → `supplemental.quote = { id, sender?, senderAllowed: true, isQuote: true }` —
+  id/sender only, since Meta never gives the quoted message's actual body.
+- `event.frequentlyForwarded` → an `untrustedContext` entry (`label:
+  "WhatsApp forwarding signal"`), since `SupplementalContextFacts.forwarded`
+  has no dedicated frequency field — that shape describes *who* forwarded
+  it, not *how often*.
+
+`senderAllowed: true` is hardcoded for both, and this is a deliberate,
+channel-specific judgment call, not a shortcut: whatsapp-cloud is a direct
+1:1 surface (`conversation: { kind: "direct" }`), and `buildSupplementalContext`
+only runs after `resolveWhatsappAccess` has already allowlist-checked
+`event.sender` above — so `context.from` on a reply can only be that
+already-vetted sender or the bot's own prior message, never an unvetted
+third party. This would NOT be a safe default on a group-chat-capable
+channel, where a quote could reference an arbitrary other participant.
+Applies uniformly across text/audio/image (`event` is the original webhook
+event, closed over from the outer function — not something rebuilt per
+`ingest` branch), covered in `inbound.test.ts`'s "forwarding / reply
+provenance" suite.
+
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#ede7f6', 'primaryBorderColor': '#5e35b1', 'primaryTextColor': '#311b92', 'lineColor': '#5e35b1', 'actorBkg': '#e0f2f1', 'actorBorder': '#00695c', 'actorTextColor': '#004d40', 'signalColor': '#5e35b1', 'signalTextColor': '#311b92'}}}%%
 sequenceDiagram
@@ -337,7 +375,7 @@ sequenceDiagram
     IN->>Meta: 👀 markAsRead({messageId, typing: true})
     IN->>TK: ingest() -> resolveTurn() -> run(...)
     Note over TK: ⏱️ whole call wrapped in withDeadline(10 min)
-    TK->>TK: buildContext(media: [fact, transcribed?])
+    TK->>TK: buildContext(media: [fact, transcribed?], supplemental: forwarded/quote provenance)
     TK-->>IN: assembled reply payload
 ```
 

@@ -210,6 +210,114 @@ describe("parseMetaWebhookPayload", () => {
     ]);
   });
 
+  it("extracts forwarded/frequently_forwarded flags from a text message's context object", () => {
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: "15551234567",
+                    id: "wamid.fwd",
+                    type: "text",
+                    text: { body: "look at this" },
+                    context: { forwarded: true, frequently_forwarded: true },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const events = parseMetaWebhookPayload(payload);
+
+    expect(events).toEqual([
+      {
+        sender: "15551234567",
+        type: "text",
+        text: "look at this",
+        messageId: "wamid.fwd",
+        forwarded: true,
+        frequentlyForwarded: true,
+      },
+    ]);
+  });
+
+  it("extracts a reply's quoted message id/sender from context.id/context.from, without forwarded flags", () => {
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: "15551234567",
+                    id: "wamid.reply",
+                    type: "text",
+                    text: { body: "yes exactly" },
+                    context: { id: "wamid.original", from: "15551234567" },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const events = parseMetaWebhookPayload(payload);
+
+    expect(events).toEqual([
+      {
+        sender: "15551234567",
+        type: "text",
+        text: "yes exactly",
+        messageId: "wamid.reply",
+        quotedMessageId: "wamid.original",
+        quotedFrom: "15551234567",
+      },
+    ]);
+  });
+
+  it("does not add forwarding/reply fields when context is absent (no regression on plain messages)", () => {
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: "15551234567",
+                    id: "wamid.plain",
+                    type: "text",
+                    text: { body: "hi" },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const events = parseMetaWebhookPayload(payload);
+
+    expect(events).toEqual([
+      {
+        sender: "15551234567",
+        type: "text",
+        text: "hi",
+        messageId: "wamid.plain",
+      },
+    ]);
+  });
+
   it("extracts an audio message event", () => {
     const payload = {
       entry: [
