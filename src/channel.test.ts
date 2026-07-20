@@ -239,4 +239,69 @@ describe("channel", () => {
       }
     }
   });
+
+  it("generate_image_for_whatsapp defaults to pollinations-image, but honors WHATSAPP_IMAGE_GENERATION_MODEL when set", async () => {
+    const previous = {
+      WHATSAPP_ACCESS_TOKEN: process.env.WHATSAPP_ACCESS_TOKEN,
+      WHATSAPP_PHONE_NUMBER_ID: process.env.WHATSAPP_PHONE_NUMBER_ID,
+      WHATSAPP_APP_SECRET: process.env.WHATSAPP_APP_SECRET,
+      WHATSAPP_VERIFY_TOKEN: process.env.WHATSAPP_VERIFY_TOKEN,
+      LITELLM_BASE_URL: process.env.LITELLM_BASE_URL,
+      LITELLM_API_KEY: process.env.LITELLM_API_KEY,
+      WHATSAPP_IMAGE_GENERATION_MODEL: process.env.WHATSAPP_IMAGE_GENERATION_MODEL,
+    };
+    process.env.WHATSAPP_ACCESS_TOKEN = "test-token";
+    process.env.WHATSAPP_PHONE_NUMBER_ID = "test-phone-id";
+    process.env.WHATSAPP_APP_SECRET = "test-app-secret";
+    process.env.WHATSAPP_VERIFY_TOKEN = "test-verify-token";
+    process.env.LITELLM_BASE_URL = "http://litellm:4000";
+    process.env.LITELLM_API_KEY = "test-litellm-key";
+    delete process.env.WHATSAPP_IMAGE_GENERATION_MODEL;
+
+    try {
+      generateImageForWhatsappMock.mockResolvedValue({
+        imageBase64: "aGVsbG8gd29ybGQ=",
+        contentType: "image/jpeg",
+      });
+      saveMediaBufferMock.mockResolvedValue({
+        id: "abc---uuid.jpg",
+        path: "/config/media/tool-whatsapp-image-generation/abc---uuid.jpg",
+        size: 11,
+        contentType: "image/jpeg",
+      });
+
+      const { registerFull } = await import("./channel.js");
+      const registerTool = vi.fn();
+      const fakeApi = {
+        config: {},
+        runtime: { channel: {} },
+        logger: { info: vi.fn(), error: vi.fn() },
+        registerTool,
+        registerHttpRoute: vi.fn(),
+      };
+      registerFull(fakeApi);
+      const registeredTool = registerTool.mock.calls[0][0];
+
+      await registeredTool.execute("call-1", { prompt: "a red panda" });
+      expect(generateImageForWhatsappMock).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ model: "pollinations-image" }),
+      );
+
+      process.env.WHATSAPP_IMAGE_GENERATION_MODEL = "custom-image-model";
+      await registeredTool.execute("call-2", { prompt: "a red panda" });
+      expect(generateImageForWhatsappMock).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ model: "custom-image-model" }),
+      );
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    }
+  });
 });

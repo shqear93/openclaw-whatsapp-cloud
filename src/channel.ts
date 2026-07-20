@@ -46,9 +46,24 @@ function getMetaClient(): MetaClient {
     cachedMetaClient = createMetaClient({
       accessToken: requiredEnv("WHATSAPP_ACCESS_TOKEN"),
       phoneNumberId: requiredEnv("WHATSAPP_PHONE_NUMBER_ID"),
+      graphApiVersion: process.env.WHATSAPP_GRAPH_API_VERSION || undefined,
+      maxMediaDownloadBytes: resolveMaxMediaDownloadBytes(),
     });
   }
   return cachedMetaClient;
+}
+
+// Overrides meta-client.ts's DEFAULT_MAX_MEDIA_DOWNLOAD_BYTES (20MB) --
+// confirmed live: a real 41MB voice note was silently unprocessable under
+// that fixed cap with no way to admit it without a code change. Invalid or
+// non-positive values fall back to the default rather than disabling the
+// cap entirely, since an unbounded download is a real resource-exhaustion
+// risk, not a reasonable "opt out" setting.
+function resolveMaxMediaDownloadBytes(): number | undefined {
+  const raw = process.env.WHATSAPP_MAX_MEDIA_DOWNLOAD_BYTES?.trim();
+  if (!raw) return undefined;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 // Same shape as `MetaClient`, but every method defers to `getMetaClient()` so
@@ -117,15 +132,16 @@ const DEFAULT_WHATSAPP_STT_LANGUAGE = "ar";
 // Defaults the primary STT model to `nova-3` (paired with the fixed
 // `language=ar` above) rather than `whisper-large` -- see
 // `resolveWhatsappSttLanguage`'s doc comment for the live comparison that
-// motivated this. `whisper-large` is still used, unconditionally and
-// without a forced language, as the FALLBACK model in
-// `createWhatsappCloudVoiceNoteTranscriber` below (`FALLBACK_STT_MODEL`) --
-// its independent ~100-language auto-detection is a better safety net for
-// an English or mixed-language voice note than retrying `nova-3`+`ar` again,
-// which would just get the wrong language a second time. `WHATSAPP_STT_MODEL`,
-// if explicitly set, overrides the PRIMARY model only (the fallback stays
-// `whisper-large` regardless, since it exists specifically to catch what
-// the primary gets wrong).
+// motivated this. `whisper-large` is still used by default, unconditionally
+// and without a forced language, as the fallback model in
+// `createWhatsappCloudVoiceNoteTranscriber` below (see
+// `resolveFallbackSttModel`) -- its independent ~100-language auto-detection
+// is a better safety net for an English or mixed-language voice note than
+// retrying `nova-3`+`ar` again, which would just get the wrong language a
+// second time. `WHATSAPP_STT_MODEL`, if explicitly set, overrides the
+// PRIMARY model only -- the fallback model is an entirely separate override
+// (`WHATSAPP_STT_FALLBACK_MODEL`), since it exists specifically to catch what
+// the primary gets wrong.
 const DEFAULT_WHATSAPP_STT_MODEL = "nova-3";
 
 function resolveWhatsappSttModel(): string {
@@ -168,6 +184,19 @@ const DEFAULT_WHATSAPP_CARTESIA_MODEL = "sonic-3";
 // independently via `WHATSAPP_CARTESIA_VOICE_ID` if a different voice ever
 // makes sense for text-message-triggered replies specifically.
 const DEFAULT_WHATSAPP_CARTESIA_VOICE_ID = "69f116b4-c5aa-45d3-a01c-d2e8d2c382a0";
+
+// The `model_name` this plugin requests from the configured LiteLLM
+// `/images/generations` endpoint (see ARCHITECTURE.md §5: the plugin only
+// depends on that endpoint responding within its own timeout budget, not on
+// any specific provider). Defaults to this project's own reference
+// deployment's model name, but a deployer pointing at a differently-named
+// LiteLLM deployment (or a different provider entirely) can override it
+// without a code change.
+const DEFAULT_WHATSAPP_IMAGE_GENERATION_MODEL = "pollinations-image";
+
+function resolveWhatsappImageGenerationModel(): string {
+  return process.env.WHATSAPP_IMAGE_GENERATION_MODEL || DEFAULT_WHATSAPP_IMAGE_GENERATION_MODEL;
+}
 
 // Same lazy-construction rationale as `getMetaClient()` above: building this
 // eagerly at module-import time would throw in any environment where the
@@ -303,7 +332,19 @@ export async function downloadWhatsappCloudInboundMedia(
  * `inbound.ts`.
  */
 const STT_RETRY_DELAY_MS = 3_000;
-const FALLBACK_STT_MODEL = "whisper-large";
+// `WHATSAPP_STT_FALLBACK_MODEL`, if set, overrides only the last-resort
+// fallback model -- the primary model/language pair (`WHATSAPP_STT_MODEL`/
+// `WHATSAPP_STT_LANGUAGE`) is a separate, independent override. There's no
+// equivalent override for the fallback's language: it stays unconditionally
+// `undefined` (real auto-detection) by design, since that's the whole reason
+// it exists as a safety net for whatever the primary got wrong (see
+// `resolveWhatsappSttModel`'s doc comment) -- a fixed fallback language would
+// defeat that purpose.
+const DEFAULT_FALLBACK_STT_MODEL = "whisper-large";
+
+function resolveFallbackSttModel(): string {
+  return process.env.WHATSAPP_STT_FALLBACK_MODEL || DEFAULT_FALLBACK_STT_MODEL;
+}
 const FALLBACK_STT_LANGUAGE = undefined;
 
 function delay(ms: number): Promise<void> {
@@ -338,6 +379,7 @@ export function createWhatsappCloudVoiceNoteTranscriber(
   return async ({ filePath, contentType }) => {
     const primaryModel = resolveWhatsappSttModel();
     const primaryLanguage = resolveWhatsappSttLanguage();
+    const fallbackModel = resolveFallbackSttModel();
 
     try {
       const text = await transcribeWith(filePath, contentType, primaryModel, primaryLanguage);
@@ -353,10 +395,10 @@ export function createWhatsappCloudVoiceNoteTranscriber(
         return { text };
       } catch (secondError) {
         console.warn(
-          `[whatsapp-cloud] STT attempt 2 (${primaryModel}) also failed, falling back to ${FALLBACK_STT_MODEL}/${FALLBACK_STT_LANGUAGE}`,
+          `[whatsapp-cloud] STT attempt 2 (${primaryModel}) also failed, falling back to ${fallbackModel}/${FALLBACK_STT_LANGUAGE}`,
           secondError,
         );
-        const text = await transcribeWith(filePath, contentType, FALLBACK_STT_MODEL, FALLBACK_STT_LANGUAGE);
+        const text = await transcribeWith(filePath, contentType, fallbackModel, FALLBACK_STT_LANGUAGE);
         return { text };
       }
     }
@@ -576,7 +618,7 @@ export function registerFull(api: any): void {
         {
           baseUrl: requiredEnv("LITELLM_BASE_URL"),
           apiKey: requiredEnv("LITELLM_API_KEY"),
-          model: "pollinations-image",
+          model: resolveWhatsappImageGenerationModel(),
         },
       );
       // Mirror OpenClaw's own `image_generate`/`music_generate` tools

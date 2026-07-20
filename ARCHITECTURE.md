@@ -915,7 +915,11 @@ deployment, a single provider with no fallback, a custom `CustomLLM`
 handler, whatever). All `image-tool.ts` requires is a LiteLLM instance
 exposing an OpenAI-compatible `/images/generations` endpoint at
 `config.baseUrl`/`config.model` (`litellm_params.model`), reachable within
-its own client-side timeout budget.
+its own client-side timeout budget. `channel.ts` sources these from
+`LITELLM_BASE_URL`/`LITELLM_API_KEY`/`WHATSAPP_IMAGE_GENERATION_MODEL`
+(the last defaults to this project's own reference deployment's
+`pollinations-image` model name, but is fully overridable — see README's
+env var table).
 
 **The one real contract: a 260s round-trip budget.** `image-tool.ts` sets
 `AbortSignal.timeout(260_000)` on its request — see that file's own doc

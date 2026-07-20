@@ -43,14 +43,19 @@ Set up a [Meta WhatsApp Business Cloud API](https://developers.facebook.com/docs
 | `WHATSAPP_PHONE_NUMBER_ID` | yes | Meta phone number id |
 | `WHATSAPP_APP_SECRET` | yes | Meta app secret, used for webhook signature verification |
 | `WHATSAPP_VERIFY_TOKEN` | yes | Webhook verification token (you choose this) |
-| `OPENROUTER_API_KEY` | for images | Used by `generate_image_for_whatsapp` |
+| `LITELLM_BASE_URL` | for images | LiteLLM proxy base URL, used by `generate_image_for_whatsapp` |
+| `LITELLM_API_KEY` | for images | LiteLLM virtual/master API key |
+| `WHATSAPP_IMAGE_GENERATION_MODEL` | no | LiteLLM `model_name` to request for image generation; defaults to `pollinations-image` (this project's own reference deployment -- see [`ARCHITECTURE.md`](./ARCHITECTURE.md) §5) |
 | `DEEPGRAM_API_KEY` | for voice notes | Speech-to-text |
 | `CARTESIA_API_KEY` | for voice replies | Text-to-speech |
 | `WHATSAPP_STT_MODEL` | no | Defaults to `nova-3` |
 | `WHATSAPP_STT_LANGUAGE` | no | Defaults to `ar`; see [`ARCHITECTURE.md`](./ARCHITECTURE.md) §3.3 for why |
+| `WHATSAPP_STT_FALLBACK_MODEL` | no | Last-resort STT fallback model; defaults to `whisper-large` |
 | `WHATSAPP_TTS_LANGUAGE` | no | Overrides only the primary STT model's language |
 | `WHATSAPP_CARTESIA_MODEL` | no | Defaults to `sonic-3` |
 | `WHATSAPP_CARTESIA_VOICE_ID` | no | Cartesia voice id |
+| `WHATSAPP_GRAPH_API_VERSION` | no | Meta Graph API version; defaults to `v21.0` |
+| `WHATSAPP_MAX_MEDIA_DOWNLOAD_BYTES` | no | Cap on inbound media download size; defaults to 20MB |
 
 In your OpenClaw config:
 
