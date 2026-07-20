@@ -75,7 +75,7 @@ Grant your agent the tools it needs:
         "id": "whatsapp",
         "tools": {
           "allow": [
-            "read", "write", "image", "message",
+            "read", "write", "image", "message", "cron", "sessions_spawn",
             "generate_image_for_whatsapp",
             "send_text_reply_for_whatsapp",
             "send_voice_reply_for_whatsapp"
@@ -86,6 +86,10 @@ Grant your agent the tools it needs:
   }
 }
 ```
+
+`sessions_spawn` is included by default — enable it unless you hit the
+third-party-app-detection exception described in
+[`ARCHITECTURE.md`](./ARCHITECTURE.md) §2.2.
 
 ## Documentation
 

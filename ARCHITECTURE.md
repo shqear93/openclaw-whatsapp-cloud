@@ -239,6 +239,19 @@ Anyone reusing this plugin for a public-facing bot sets `dmPolicy: "open"`
 `resolveWhatsappAccess` already routes through all four modes via the same
 shared SDK helper.
 
+**Tool grants: `sessions_spawn` is on by default, with one exception.** The
+example config in the README grants the whatsapp agent `sessions_spawn`
+alongside `cron` — enable both unless your deployment hits a specific,
+uncommon failure mode: some Claude Code OAuth-backed model routes reject
+requests with a 400 `"Third-party apps now draw from your extra usage, not
+your plan limits"` error when `cron` and `sessions_spawn` are both present
+in the same agent's tool schema at once, treating the combination as an
+autonomous-agent-framework fingerprint. This isn't specific to this plugin
+or to WhatsApp — it's a property of the model route, not the channel. If
+your agent's model route rejects requests this way, drop `cron` or
+`sessions_spawn` (whichever your agent needs less) from that agent's
+`tools.allow` rather than switching model routes.
+
 **The `ingest` / `resolveTurn` / `delivery` adapter shape.** OpenClaw's turn
 kernel `await`s `adapter.ingest(raw)` first, then calls `resolveTurn(input)`
 to build session/context state, then dispatches the reply through
