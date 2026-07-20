@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.1](https://github.com/shqear93/openclaw-whatsapp-cloud/compare/v1.2.0...v1.2.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* **inbound:** mark inbound image messages as read and start typing ([4bfef1c](https://github.com/shqear93/openclaw-whatsapp-cloud/commit/4bfef1cfe950be1d148f0c5222391ae1677c371f))
+* **inbound:** reply with a clear message instead of silence when media download fails ([4c3bc1a](https://github.com/shqear93/openclaw-whatsapp-cloud/commit/4c3bc1a0e3ee1acea89843ed60649f0d89d04758))
+
 ## [1.2.0](https://github.com/shqear93/openclaw-whatsapp-cloud/compare/v1.1.0...v1.2.0) (2026-07-17)
 
 
