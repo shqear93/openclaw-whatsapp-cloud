@@ -907,72 +907,28 @@ including the response body text for diagnosability; a missing message id
 in a successful-status response is still treated as an error rather than
 silently returning an empty result.
 
-## 5. LiteLLM image-generation backend
+## 5. What the plugin assumes about its LiteLLM backend
 
-This lives outside the plugin itself (`litellm/config.yaml`,
-`litellm/bootstrap/custom_pollinations_image.py`,
-`litellm/bootstrap/custom_ai_horde_image.py`,
-`litellm/bootstrap/sitecustomize.py`), but the plugin's `image-tool.ts`
-timeout math and retry expectations are derived directly from it.
+This plugin doesn't ship or depend on any specific image-generation
+provider — that's entirely the deploying operator's choice (a paid DALL-E
+deployment, a single provider with no fallback, a custom `CustomLLM`
+handler, whatever). All `image-tool.ts` requires is a LiteLLM instance
+exposing an OpenAI-compatible `/images/generations` endpoint at
+`config.baseUrl`/`config.model` (`litellm_params.model`), reachable within
+its own client-side timeout budget.
 
-- **`pollinations-image`** (primary): a custom `CustomLLM` handler
-  (`custom_pollinations_image.py`) wrapping Pollinations.ai's
-  unauthenticated `GET image.pollinations.ai/prompt/{prompt}` endpoint —
-  confirmed live to return real `image/jpeg` bytes with no credentials.
-  Deployment timeout: 45s.
-- **`ai-horde-image`** (fallback): a custom handler
-  (`custom_ai_horde_image.py`) hiding AI Horde's genuinely asynchronous
-  submit → poll(`/check/`) → fetch(`/status/`) flow behind one blocking
-  call, using the public anonymous API key `"0000000000"`. Deployment
-  timeout: 180s (comfortably above the handler's own internal 170s poll
-  ceiling, so the handler's clearer error message fires before the
-  router's generic timeout does). A finished-but-`censored: true`
-  generation is treated as a hard failure, not silently returned as if it
-  were the requested image.
-- **Fallback chain**: `router_settings.fallbacks` maps
-  `pollinations-image → [pollinations-image, ai-horde-image]`.
-
-**LiteLLM 1.89.2 quirks worked around here** (both confirmed by tracing the
-actual installed package, not assumed from docs):
-
-1. **`custom_llm_provider` not forwarded to `get_llm_provider()`.** LiteLLM
-   1.89.2's async image-generation path (`litellm/images/main.py`) calls
-   `get_llm_provider(model=model, ...)` *without* forwarding
-   `litellm_params.custom_llm_provider` — so a bare model string with no
-   `/` raises `BadRequestError` before the custom handler is ever reached.
-   Both deployments work around this by prefixing the model string itself
-   with the provider name (`model: pollinations_image_custom/flux`,
-   `model: ai_horde_image_custom/stable_diffusion`) alongside setting
-   `custom_llm_provider` normally — the prefix is what actually matters for
-   dispatch to succeed.
-2. **`router_settings.num_retries` needs a per-deployment `0` override.**
-   `router_settings.num_retries: 1` is a *global* default that would
-   otherwise also apply to these two deployments. Tracing
-   `router.py`/`exception_mapping_utils.py` shows
-   `async_function_with_fallbacks` calls `async_function_with_retries`
-   *before* ever falling back to the next model group in
-   `router_settings.fallbacks`, and a `CustomLLMError` from these handlers
-   maps to a retryable exception type. Without `num_retries: 0` set
-   explicitly on both `pollinations-image` and `ai-horde-image`, a failing
-   call would retry the *same* deployment once before fallback even starts —
-   nearly doubling worst-case latency (up to ~450s total instead of the
-   225s design figure) before the fallback chain gets a chance to run, and
-   for `ai-horde-image` specifically (the last link in the chain) a retry
-   burns time for no benefit since there's nowhere left to fall back to.
-
-A secondary, purely cosmetic issue is also worked around in
-`sitecustomize.py`'s `_register_cost_map_entries()`: with
-`router_settings.enable_pre_call_checks: true`, every call to these custom
-models otherwise logs a noisy (but non-fatal) "This model isn't mapped yet"
-ERROR line, because `Router._create_deployment()` double-prefixes the model
-string before calling `litellm.register_model()` (since the model is
-already `"<custom_llm_provider>/<model>"` per the workaround above), so the
-key registered via `config.yaml`'s `litellm_params` never matches what
-`get_router_model_info()` looks up at call time. `sitecustomize.py` instead
-registers `litellm.model_cost` directly under the correct single-prefixed
-keys (`pollinations_image_custom/flux`,
-`ai_horde_image_custom/stable_diffusion`), both at `$0` cost since both APIs
-are genuinely free.
+**The one real contract: a 260s round-trip budget.** `image-tool.ts` sets
+`AbortSignal.timeout(260_000)` on its request — see that file's own doc
+comment for the full worked-through math. Whatever backend a deployer
+points this at (a single fast provider, or a multi-hop fallback chain),
+it needs to either succeed or hand back a definitive failure within that
+window; the plugin doesn't retry or fall back on its own past that point.
+Reference-deployment specifics (which providers, their individual
+timeouts, LiteLLM router quirks worked around to hit that budget) live in
+`claw-infra`'s own `litellm/config.yaml` and the standalone
+`litellm-free-image-providers` package — that's this project's own
+infrastructure choice, not something every user of this plugin needs to
+replicate.
 
 ## 6. Deployment
 
