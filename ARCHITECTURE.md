@@ -117,8 +117,8 @@ registered by `channel.ts`'s `registerFull` at `/whatsapp-cloud/webhook` via
   using `WHATSAPP_APP_SECRET`, compared with `timingSafeEqual`. Only after
   signature verification does the handler `JSON.parse` the body.
 - `parseMetaWebhookPayload` extracts one `MetaWebhookEvent` per inbound
-  message (`type: "text" | "audio"`), dropping anything else (reactions,
-  status callbacks, unknown message types) silently.
+  message (`type: "text" | "audio" | "image"`), dropping anything else
+  (reactions, status callbacks, unknown message types) silently.
 - Each parsed event is handed synchronously to `onEvent`, which in
   `registerFull` is a `void`-fired call into `dispatchWhatsappInboundEvent`
   (§2.2) — the webhook responds `200 {"status":"ok"}` immediately without
@@ -163,8 +163,20 @@ to build session/context state, then dispatches the reply through
   transcribes it *synchronously inside `ingest`* before returning, so the
   agent's prompt is built from real transcribed text — see §2.4 for why this
   step exists and is time-bounded.
+- For `type: "image"` events, downloads the image (§2.3) and attaches it as
+  a native `media` fact; any caption becomes `rawText`.
 - Any other/unrecognized event shape returns `null`, which the kernel treats
   as a cleanly-dropped turn (no crash, no fabricated text).
+- **Download failures are caught inside `ingest`, not left to propagate.**
+  Both the audio and image branches route their download call through
+  `downloadInboundMediaOrNotifyFailure`, which on a thrown error (e.g.
+  `meta-client.ts`'s `MAX_MEDIA_DOWNLOAD_BYTES` 20MB cap rejecting an
+  oversized file — confirmed live with a real 41MB voice note) logs a
+  warning, sends the sender a plain-text "couldn't process that
+  voice note/image" reply, and returns `null` to drop the turn cleanly.
+  Before this existed, the exception surfaced nowhere: no reply, no typing
+  indicator, total silence from the bot's side while Meta itself showed the
+  message as delivered.
 
 `resolveTurn` builds the kernel's native inbound context via
 `channelRuntime.inbound.buildContext(...)`, including the native `media`
@@ -189,15 +201,31 @@ sequenceDiagram
     WH->>WH: verify HMAC signature, cap 1MB, parse
     WH->>IN: onEvent(MetaWebhookEvent)
     WH-->>Meta: 200 {"status":"ok"} (fire-and-forget)
-    IN->>IN: resolveWhatsappAccess (allowlist check)
-    alt event.type == "audio"
+    IN->>IN: resolveWhatsappAccess (allowlist check against allowFrom)
+    alt sender not in allowFrom
+        IN-->>IN: rejected / paired-off, no turn started
+    else event.type == "audio"
         IN->>Meta: downloadMedia(mediaId)
-        IN->>DG: transcribeAudioFile (withDeadline 75s)
-        DG-->>IN: transcript
+        alt download fails (e.g. >20MB cap)
+            IN->>Meta: sendText("couldn't process that voice note...")
+            IN-->>IN: ingest() returns null, turn dropped
+        else download succeeds
+            IN->>DG: transcribeAudioFile (withDeadline 75s)
+            DG-->>IN: transcript
+        end
+    else event.type == "image"
+        IN->>Meta: downloadMedia(mediaId)
+        alt download fails
+            IN->>Meta: sendText("couldn't process that image...")
+            IN-->>IN: ingest() returns null, turn dropped
+        else download succeeds
+            IN->>IN: attach media fact (kind: "image"), caption -> rawText
+        end
     end
+    IN->>Meta: markAsRead({messageId, typing: true})
     IN->>TK: ingest() -> resolveTurn() -> run(...)
     Note over TK: whole call wrapped in withDeadline(10 min)
-    TK->>TK: buildContext(media: [audio fact, transcribed])
+    TK->>TK: buildContext(media: [fact, transcribed?])
     TK-->>IN: assembled reply payload
 ```
 
