@@ -54,46 +54,53 @@ the transport around them changed completely.
 
 ```mermaid
 flowchart TD
-    A["Sender phone x<br/>(any number in allowFrom)"] -->|WhatsApp message| B["Meta WhatsApp Business number y<br/>(registered in Meta Cloud API)"]
-    B -->|"webhook POST, from: x"| C["webhook.ts<br/>verify signature, parse"]
-    C --> D{"msg.type?"}
-    D -->|text| E["type=text"]
-    D -->|audio| F["type=audio"]
-    D -->|image| G["type=image"]
-    D -->|other/unsupported| X["dropped silently"]
+    classDef external fill:#e3f2fd,stroke:#1565c0,stroke-width:1.5px,color:#0d47a1
+    classDef decision fill:#fff8e1,stroke:#f9a825,stroke-width:1.5px,color:#7f6003
+    classDef success fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#1b5e20
+    classDef failure fill:#ffebee,stroke:#c62828,stroke-width:1.5px,color:#7f0000
+    classDef core fill:#ede7f6,stroke:#5e35b1,stroke-width:1.5px,color:#311b92
+    classDef agent fill:#e0f2f1,stroke:#00695c,stroke-width:1.5px,color:#004d40
 
-    E --> H["dispatchWhatsappInboundEvent"]
+    A["📱 Sender phone x<br/>(any number in allowFrom)"]:::external -->|WhatsApp message| B["☎️ Meta WhatsApp Business number y<br/>(registered in Meta Cloud API)"]:::external
+    B -->|"webhook POST, from: x"| C["🔐 webhook.ts<br/>verify signature, parse"]:::core
+    C --> D{"msg.type?"}:::decision
+    D -->|text| E["💬 type=text"]:::core
+    D -->|audio| F["🎙️ type=audio"]:::core
+    D -->|image| G["🖼️ type=image"]:::core
+    D -->|other/unsupported| X["🗑️ dropped silently"]:::failure
+
+    E --> H["dispatchWhatsappInboundEvent"]:::core
     F --> H
     G --> H
 
-    H --> I["resolveWhatsappAccess<br/>checks channels['whatsapp-cloud'].allowFrom"]
-    I --> J{"is x in allowFrom?"}
-    J -->|no, dmPolicy=allowlist| K["rejected / paired-off, no turn started"]
-    J -->|yes| L["adapter.ingest(raw)"]
+    H --> I["🔒 resolveWhatsappAccess<br/>checks channels['whatsapp-cloud'].allowFrom"]:::core
+    I --> J{"is x in allowFrom?"}:::decision
+    J -->|no, dmPolicy=allowlist| K["🚫 rejected / paired-off, no turn started"]:::failure
+    J -->|yes| L["adapter.ingest(raw)"]:::core
 
-    L --> M{"event type"}
-    M -->|audio| N["downloadVoiceNoteMedia<br/>via downloadInboundMediaOrNotifyFailure"]
-    M -->|image| O["downloadImageMedia<br/>via downloadInboundMediaOrNotifyFailure"]
-    M -->|text| P["rawText passed through directly"]
+    L --> M{"event type"}:::decision
+    M -->|audio| N["⬇️ downloadVoiceNoteMedia<br/>via downloadInboundMediaOrNotifyFailure"]:::core
+    M -->|image| O["⬇️ downloadImageMedia<br/>via downloadInboundMediaOrNotifyFailure"]:::core
+    M -->|text| P["rawText passed through directly"]:::success
 
-    N -->|success| N2["transcribeVoiceNoteMedia<br/>Deepgram nova-3, whisper-large fallback"]
-    N -->|"download fails, e.g. >20MB cap"| N3["sendText: couldn't process that voice note...<br/>turn dropped, ingest returns null"]
+    N -->|success| N2["📝 transcribeVoiceNoteMedia<br/>Deepgram nova-3, whisper-large fallback"]:::success
+    N -->|"download fails, e.g. >20MB cap"| N3["⚠️ sendText: couldn't process that voice note...<br/>turn dropped, ingest returns null"]:::failure
 
-    O -->|success| O2["media fact attached, kind=image<br/>caption used as rawText, if present"]
-    O -->|download fails| O3["sendText: couldn't process that image...<br/>turn dropped, ingest returns null"]
+    O -->|success| O2["🖼️ media fact attached, kind=image<br/>caption used as rawText, if present"]:::success
+    O -->|download fails| O3["⚠️ sendText: couldn't process that image...<br/>turn dropped, ingest returns null"]:::failure
 
-    N2 --> Q["markAsRead + typing indicator started"]
+    N2 --> Q["👀 markAsRead + typing indicator started"]:::agent
     O2 --> Q
     P --> Q
 
-    Q --> R["adapter.resolveTurn<br/>buildContext with media facts"]
-    R --> S["Agent turn runs on the configured model"]
-    S --> T{"agent tool call"}
-    T -->|text reply| U["send_text_reply_for_whatsapp"]
-    T -->|voice reply| V["send_voice_reply_for_whatsapp"]
-    T -->|image gen| W["generate_image_for_whatsapp"]
+    Q --> R["adapter.resolveTurn<br/>buildContext with media facts"]:::agent
+    R --> S["🤖 Agent turn runs on the configured model"]:::agent
+    S --> T{"agent tool call"}:::decision
+    T -->|text reply| U["send_text_reply_for_whatsapp"]:::agent
+    T -->|voice reply| V["send_voice_reply_for_whatsapp"]:::agent
+    T -->|image gen| W["generate_image_for_whatsapp"]:::agent
 
-    U --> Y["Meta Cloud API<br/>message sent from y to x"]
+    U --> Y["✅ Meta Cloud API<br/>message sent from y to x"]:::success
     V --> Y
     W --> Y
 ```
@@ -102,30 +109,40 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    subgraph Meta["Meta WhatsApp Cloud API"]
-        WA[WhatsApp user]
+    classDef meta fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
+    classDef plugin fill:#ede7f6,stroke:#5e35b1,color:#311b92
+    classDef kernel fill:#e0f2f1,stroke:#00695c,color:#004d40
+    classDef ext fill:#fff3e0,stroke:#ef6c00,color:#e65100
+
+    subgraph Meta["☎️ Meta WhatsApp Cloud API"]
+        WA[WhatsApp user]:::meta
     end
 
-    subgraph Plugin["whatsapp-cloud plugin (src/)"]
-        WH[webhook.ts]
-        IN[inbound.ts]
-        CH[channel.ts]
-        MA[message-adapter.ts]
-        MC[meta-client.ts]
+    subgraph Plugin["🔌 whatsapp-cloud plugin (src/)"]
+        WH[webhook.ts]:::plugin
+        IN[inbound.ts]:::plugin
+        CH[channel.ts]:::plugin
+        MA[message-adapter.ts]:::plugin
+        MC[meta-client.ts]:::plugin
     end
 
-    subgraph Kernel["OpenClaw gateway / turn kernel"]
-        TK[channelRuntime.inbound.run]
-        AG[whatsapp agent session]
+    subgraph Kernel["🧠 OpenClaw gateway / turn kernel"]
+        TK[channelRuntime.inbound.run]:::kernel
+        AG[whatsapp agent session]:::kernel
     end
 
-    subgraph External["External services"]
-        DG[Deepgram STT]
-        CT[Cartesia TTS]
-        LL[LiteLLM /images/generations]
-        PO[Pollinations.ai]
-        AH[AI Horde]
+    subgraph External["🌐 External services"]
+        DG[Deepgram STT]:::ext
+        CT[Cartesia TTS]:::ext
+        LL[LiteLLM /images/generations]:::ext
+        PO[Pollinations.ai]:::ext
+        AH[AI Horde]:::ext
     end
+
+    style Meta fill:#f5fafe,stroke:#1565c0,stroke-width:1px
+    style Plugin fill:#f8f6fc,stroke:#5e35b1,stroke-width:1px
+    style Kernel fill:#f2fbfa,stroke:#00695c,stroke-width:1px
+    style External fill:#fffaf3,stroke:#ef6c00,stroke-width:1px
 
     WA -- "POST webhook" --> WH
     WH --> IN
@@ -238,12 +255,14 @@ real transcript, so the framework doesn't pay for (and doesn't
 overwrite `Body` with) a redundant second Deepgram call.
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#ede7f6', 'primaryBorderColor': '#5e35b1', 'primaryTextColor': '#311b92', 'lineColor': '#5e35b1', 'actorBkg': '#e0f2f1', 'actorBorder': '#00695c', 'actorTextColor': '#004d40', 'signalColor': '#5e35b1', 'signalTextColor': '#311b92'}}}%%
 sequenceDiagram
-    participant Meta as Meta Cloud API
-    participant WH as webhook.ts
-    participant IN as inbound.ts (adapter)
-    participant TK as turn kernel
-    participant DG as Deepgram STT
+    autonumber
+    participant Meta as ☎️ Meta Cloud API
+    participant WH as 🔐 webhook.ts
+    participant IN as 🔌 inbound.ts (adapter)
+    participant TK as 🧠 turn kernel
+    participant DG as 🗣️ Deepgram STT
 
     Meta->>WH: POST webhook (signed body)
     WH->>WH: verify HMAC signature, cap 1MB, parse
@@ -251,28 +270,38 @@ sequenceDiagram
     WH-->>Meta: 200 {"status":"ok"} (fire-and-forget)
     IN->>IN: resolveWhatsappAccess (allowlist check against allowFrom)
     alt sender not in allowFrom
-        IN-->>IN: rejected / paired-off, no turn started
+        rect rgb(255, 235, 238)
+        IN-->>IN: 🚫 rejected / paired-off, no turn started
+        end
     else event.type == "audio"
         IN->>Meta: downloadMedia(mediaId)
         alt download fails (e.g. >20MB cap)
-            IN->>Meta: sendText("couldn't process that voice note...")
+            rect rgb(255, 235, 238)
+            IN->>Meta: ⚠️ sendText("couldn't process that voice note...")
             IN-->>IN: ingest() returns null, turn dropped
+            end
         else download succeeds
+            rect rgb(232, 245, 233)
             IN->>DG: transcribeAudioFile (withDeadline 75s)
             DG-->>IN: transcript
+            end
         end
     else event.type == "image"
         IN->>Meta: downloadMedia(mediaId)
         alt download fails
-            IN->>Meta: sendText("couldn't process that image...")
+            rect rgb(255, 235, 238)
+            IN->>Meta: ⚠️ sendText("couldn't process that image...")
             IN-->>IN: ingest() returns null, turn dropped
+            end
         else download succeeds
+            rect rgb(232, 245, 233)
             IN->>IN: attach media fact (kind: "image"), caption -> rawText
+            end
         end
     end
-    IN->>Meta: markAsRead({messageId, typing: true})
+    IN->>Meta: 👀 markAsRead({messageId, typing: true})
     IN->>TK: ingest() -> resolveTurn() -> run(...)
-    Note over TK: whole call wrapped in withDeadline(10 min)
+    Note over TK: ⏱️ whole call wrapped in withDeadline(10 min)
     TK->>TK: buildContext(media: [fact, transcribed?])
     TK-->>IN: assembled reply payload
 ```
@@ -357,13 +386,18 @@ bypass this pair entirely). `deliver()` then checks
 
 ```mermaid
 flowchart TD
-    A[agent turn running] -- "explicit tool call" --> B["send_text_reply_for_whatsapp /\nsend_voice_reply_for_whatsapp (channel.ts)"]
-    B --> C["markReplySent(sender)\n(reply-delivery-tracker.ts)"]
-    B --> D[WhatsApp text or voice note]
-    A -- "plain final text (kernel)" --> E["deliver() checks\nwasReplySentThisTurn(sender)"]
-    E -- "true: already sent" --> F[dropped -- no double-send]
-    E -- "false: nothing sent" --> G["sendText: flagged fallback message"]
-    G --> H["⚠️ visibly marked as fallback,\nnot a normal reply"]
+    classDef agent fill:#e0f2f1,stroke:#00695c,color:#004d40
+    classDef success fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
+    classDef failure fill:#ffebee,stroke:#c62828,color:#7f0000
+    classDef warn fill:#fff8e1,stroke:#f9a825,color:#7f6003
+
+    A[🤖 agent turn running]:::agent -- "explicit tool call" --> B["send_text_reply_for_whatsapp /\nsend_voice_reply_for_whatsapp (channel.ts)"]:::agent
+    B --> C["markReplySent(sender)\n(reply-delivery-tracker.ts)"]:::agent
+    B --> D[✅ WhatsApp text or voice note]:::success
+    A -- "plain final text (kernel)" --> E["deliver() checks\nwasReplySentThisTurn(sender)"]:::agent
+    E -- "true: already sent" --> F[🗑️ dropped -- no double-send]:::failure
+    E -- "false: nothing sent" --> G["sendText: flagged fallback message"]:::warn
+    G --> H["⚠️ visibly marked as fallback,\nnot a normal reply"]:::warn
 ```
 
 **Why not automatic conversion.** An earlier design had `durable()`
@@ -558,24 +592,30 @@ instructs the agent to reuse the exact path string verbatim and never pass
 path-not-payload pattern is reused for the *inbound* voice-note leg (§2.3).
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#ede7f6', 'primaryBorderColor': '#5e35b1', 'primaryTextColor': '#311b92', 'lineColor': '#5e35b1', 'actorBkg': '#fff3e0', 'actorBorder': '#ef6c00', 'actorTextColor': '#e65100'}}}%%
 sequenceDiagram
-    participant Agent as whatsapp agent
-    participant Tool as generate_image_for_whatsapp
-    participant LL as LiteLLM /images/generations
-    participant PO as pollinations-image
-    participant AH as ai-horde-image (fallback)
-    participant Sandbox as saveMediaBuffer (tool-whatsapp-image-generation)
-    participant MsgTool as message tool
-    participant MC as meta-client.ts
+    autonumber
+    participant Agent as 🤖 whatsapp agent
+    participant Tool as 🎨 generate_image_for_whatsapp
+    participant LL as 🧪 LiteLLM /images/generations
+    participant PO as 🌸 pollinations-image
+    participant AH as 🐴 ai-horde-image (fallback)
+    participant Sandbox as 💾 saveMediaBuffer
+    participant MsgTool as 📤 message tool
+    participant MC as ☎️ meta-client.ts
 
     Agent->>Tool: execute({prompt})
     Tool->>LL: POST /images/generations (b64_json, timeout 260s)
     LL->>PO: dispatch (timeout 45s, num_retries 0)
     alt Pollinations fails
+        rect rgb(255, 243, 224)
         LL->>AH: fallback (timeout 180s, num_retries 0)
         AH-->>LL: b64_json
+        end
     else Pollinations succeeds
+        rect rgb(232, 245, 233)
         PO-->>LL: b64_json
+        end
     end
     LL-->>Tool: imageBase64, contentType
     Tool->>Sandbox: saveMediaBuffer(bytes, contentType)
@@ -583,7 +623,7 @@ sequenceDiagram
     Tool-->>Agent: "saved to {path}, call message tool with path=..."
     Agent->>MsgTool: send(action=send, path, message)
     MsgTool->>MC: sendImage
-    MC-->>MsgTool: WhatsApp image message delivered
+    MC-->>MsgTool: ✅ WhatsApp image message delivered
 ```
 
 *Why not OpenClaw's native `image_generate` tool:* it fully supports LiteLLM as a
@@ -755,11 +795,15 @@ missing feature, it's what's actually appropriate given what's stable today.
 
 ```mermaid
 flowchart LR
-    A["agent final reply text\n(voice-originated turn)"] --> B["stripMarkdownForSpeech\n(markdown-strip.ts)"]
-    B --> C["Cartesia POST /tts/bytes\nlanguage=WHATSAPP_TTS_LANGUAGE (default ar)"]
-    C --> D["mp3 audio bytes"]
-    D --> E["meta-client.ts sendAudioBytes\n(upload then reference)"]
-    E --> F[WhatsApp voice note to user]
+    classDef core fill:#ede7f6,stroke:#5e35b1,color:#311b92
+    classDef ext fill:#fff3e0,stroke:#ef6c00,color:#e65100
+    classDef success fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
+
+    A["🤖 agent final reply text\n(voice-originated turn)"]:::core --> B["✂️ stripMarkdownForSpeech\n(markdown-strip.ts)"]:::core
+    B --> C["🗣️ Cartesia POST /tts/bytes\nlanguage=WHATSAPP_TTS_LANGUAGE (default ar)"]:::ext
+    C --> D[🔊 mp3 audio bytes]:::ext
+    D --> E["📤 meta-client.ts sendAudioBytes\n(upload then reference)"]:::core
+    E --> F[✅ WhatsApp voice note to user]:::success
     C -. "wrapped in withDeadline 100s" .-> C
 ```
 
