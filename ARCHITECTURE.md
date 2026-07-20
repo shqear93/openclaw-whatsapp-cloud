@@ -217,6 +217,26 @@ entries are bare E.164-without-`+` digit strings (see
 `openclaw/config/openclaw.base.json`'s `channels.whatsapp-cloud.allowFrom`);
 `stripLeadingPlus` normalizes senders before matching.
 
+**`dmPolicy` is a deployment choice, not a hard-coded restriction.** The SDK
+(`dm-policy-shared.ts`) supports four modes, and this plugin doesn't assume
+any one of them — a deployment picks the mode that fits its use case:
+
+- `"allowlist"` — only senders in `allowFrom` get through. What this
+  repo's own reference deployment (`openclaw/config/openclaw.base.json` in
+  `claw-infra`) uses, since it's a personal bot on a single verified number.
+- `"open"` — anyone can message in (`allowFrom: ["*"]`), or an allowlist
+  still layers on top if `allowFrom` is set without `"*"`. This is the mode
+  for a genuinely public bot.
+- `"pairing"` — new senders go through a self-service pairing flow instead
+  of the operator pre-approving every number; a public-but-not-anonymous
+  middle ground.
+- `"disabled"` — no DMs accepted at all.
+
+Anyone reusing this plugin for a public-facing bot sets `dmPolicy: "open"`
+(or `"pairing"`) instead of `"allowlist"` — no plugin code changes needed;
+`resolveWhatsappAccess` already routes through all four modes via the same
+shared SDK helper.
+
 **The `ingest` / `resolveTurn` / `delivery` adapter shape.** OpenClaw's turn
 kernel `await`s `adapter.ingest(raw)` first, then calls `resolveTurn(input)`
 to build session/context state, then dispatches the reply through
