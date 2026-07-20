@@ -75,7 +75,7 @@ flowchart TD
 
     H --> I["🔒 resolveWhatsappAccess<br/>checks channels['whatsapp-cloud'].allowFrom"]:::core
     I --> J{"is x in allowFrom?"}:::decision
-    J -->|no, dmPolicy=allowlist| K["🚫 rejected / paired-off, no turn started"]:::failure
+    J -->|"no (per configured dmPolicy)"| K["🚫 rejected / paired-off, no turn started"]:::failure
     J -->|yes| L["adapter.ingest(raw)"]:::core
 
     L --> M{"event type"}:::decision
@@ -221,12 +221,14 @@ entries are bare E.164-without-`+` digit strings (see
 (`dm-policy-shared.ts`) supports four modes, and this plugin doesn't assume
 any one of them — a deployment picks the mode that fits its use case:
 
-- `"allowlist"` — only senders in `allowFrom` get through. What this
-  repo's own reference deployment (`openclaw/config/openclaw.base.json` in
-  `claw-infra`) uses, since it's a personal bot on a single verified number.
+- `"allowlist"` — only senders in `allowFrom` get through. Right for a
+  personal bot restricted to specific numbers.
 - `"open"` — anyone can message in (`allowFrom: ["*"]`), or an allowlist
   still layers on top if `allowFrom` is set without `"*"`. This is the mode
-  for a genuinely public bot.
+  for a genuinely public bot, and what this repo's own reference deployment
+  (`openclaw/config/openclaw.base.json` in `claw-infra`) uses as of
+  2026-07-20, after starting out on `"allowlist"` restricted to a single
+  verified number.
 - `"pairing"` — new senders go through a self-service pairing flow instead
   of the operator pre-approving every number; a public-but-not-anonymous
   middle ground.
@@ -288,8 +290,8 @@ sequenceDiagram
     WH->>WH: verify HMAC signature, cap 1MB, parse
     WH->>IN: onEvent(MetaWebhookEvent)
     WH-->>Meta: 200 {"status":"ok"} (fire-and-forget)
-    IN->>IN: resolveWhatsappAccess (allowlist check against allowFrom)
-    alt sender not in allowFrom
+    IN->>IN: resolveWhatsappAccess (access check per configured dmPolicy)
+    alt sender rejected by dmPolicy
         rect rgb(255, 235, 238)
         IN-->>IN: 🚫 rejected / paired-off, no turn started
         end
