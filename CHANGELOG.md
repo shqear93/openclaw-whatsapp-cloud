@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0](https://github.com/shqear93/openclaw-whatsapp-cloud/compare/v1.2.1...v1.3.0) (2026-07-21)
+
+
+### Features
+
+* **inbound:** surface forwarding/reply provenance to the agent ([8c9d004](https://github.com/shqear93/openclaw-whatsapp-cloud/commit/8c9d0046a6a91139936f7f614c092274e784e2f4))
+* parameterize hardcoded image-generation model, STT fallback model, Meta API version/media cap ([b38913a](https://github.com/shqear93/openclaw-whatsapp-cloud/commit/b38913ab18941742e3bd40e9f137c1b776bff2d4))
+
 ## [1.2.1](https://github.com/shqear93/openclaw-whatsapp-cloud/compare/v1.2.0...v1.2.1) (2026-07-20)
 
 
