@@ -300,16 +300,17 @@ overwrite `Body` with) a redundant second Deepgram call.
 
 **Forwarding/reply provenance → `supplemental`.** The same `buildContext`
 call also passes `supplemental: buildSupplementalContext(event)`
-(`inbound.ts`), mapping the `forwarded`/`frequentlyForwarded`/
-`quotedMessageId`/`quotedFrom` fields parsed in §2.1 onto the SDK's native
+(`inbound.ts`), mapping the provenance fields (forwarded/
+frequentlyForwarded/quotedMessageId/quotedFrom, now nested under
+event.provenance) parsed in §2.1 onto the SDK's native
 `SupplementalContextFacts` shape — the same mechanism every OpenClaw channel
 plugin uses for "this text isn't necessarily the sender's own words," not a
 bespoke one:
 
-- `event.forwarded` → `supplemental.forwarded = { senderAllowed: true }`.
-- `event.quotedMessageId` → `supplemental.quote = { id, sender?, senderAllowed: true, isQuote: true }` —
+- `event.provenance?.forwarded` → `supplemental.forwarded = { senderAllowed: true }`.
+- `event.provenance?.quotedMessageId` → `supplemental.quote = { id, sender?, senderAllowed: true, isQuote: true }` —
   id/sender only, since Meta never gives the quoted message's actual body.
-- `event.frequentlyForwarded` → an `untrustedContext` entry (`label:
+- `event.provenance?.frequentlyForwarded` → an `untrustedContext` entry (`label:
   "WhatsApp forwarding signal"`), since `SupplementalContextFacts.forwarded`
   has no dedicated frequency field — that shape describes *who* forwarded
   it, not *how often*.
@@ -882,8 +883,12 @@ flowchart LR
 
 ## 4. Meta Graph API client — `meta-client.ts`
 
-`createMetaClient({ accessToken, phoneNumberId })` wraps the WhatsApp Cloud
-API (`graph.facebook.com/v21.0/{phoneNumberId}/...`):
+`createMetaClient({ accessToken, phoneNumberId, graphApiVersion?,
+maxMediaDownloadBytes? })` wraps the WhatsApp Cloud API
+(`graph.facebook.com/<version>/{phoneNumberId}/...`, defaulting to
+`v21.0` — `channel.ts` sources `graphApiVersion` from
+`WHATSAPP_GRAPH_API_VERSION`, letting a deployer pick up a newer Graph API
+version without a code change once Meta eventually sunsets `v21.0`):
 
 - `sendText` / `sendAudio` (by pre-uploaded media id) / `sendImage`
   (upload-then-reference) / `sendAudioBytes` (upload-then-reference, used
@@ -915,7 +920,11 @@ deployment, a single provider with no fallback, a custom `CustomLLM`
 handler, whatever). All `image-tool.ts` requires is a LiteLLM instance
 exposing an OpenAI-compatible `/images/generations` endpoint at
 `config.baseUrl`/`config.model` (`litellm_params.model`), reachable within
-its own client-side timeout budget.
+its own client-side timeout budget. `channel.ts` sources these from
+`LITELLM_BASE_URL`/`LITELLM_API_KEY`/`WHATSAPP_IMAGE_GENERATION_MODEL`
+(the last defaults to this project's own reference deployment's
+`pollinations-image` model name, but is fully overridable — see README's
+env var table).
 
 **The one real contract: a 260s round-trip budget.** `image-tool.ts` sets
 `AbortSignal.timeout(260_000)` on its request — see that file's own doc

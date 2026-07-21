@@ -114,6 +114,53 @@ describe("WhatsApp Cloud voice-note wiring", () => {
     expect(media).toEqual({ path: "/sandbox/media/inbound/abc.ogg", contentType: "audio/ogg" });
   });
 
+  it("constructs the Meta client with no graphApiVersion/maxMediaDownloadBytes override by default", async () => {
+    downloadMediaMock.mockResolvedValue({ bytes: new Uint8Array([1]), mimeType: "audio/ogg" });
+    saveMediaBufferMock.mockResolvedValue({ path: "/sandbox/media/inbound/abc.ogg", contentType: "audio/ogg" });
+    const { createMetaClient } = await import("./meta-client.js");
+
+    const { downloadWhatsappCloudInboundMedia } = await import("./channel.js");
+    await downloadWhatsappCloudInboundMedia({ mediaId: "media-1" });
+
+    expect(createMetaClient).toHaveBeenCalledWith(
+      expect.objectContaining({ graphApiVersion: undefined, maxMediaDownloadBytes: undefined }),
+    );
+  });
+
+  it("honors WHATSAPP_GRAPH_API_VERSION/WHATSAPP_MAX_MEDIA_DOWNLOAD_BYTES overrides when set", async () => {
+    process.env.WHATSAPP_GRAPH_API_VERSION = "v22.0";
+    process.env.WHATSAPP_MAX_MEDIA_DOWNLOAD_BYTES = "52428800";
+    downloadMediaMock.mockResolvedValue({ bytes: new Uint8Array([1]), mimeType: "audio/ogg" });
+    saveMediaBufferMock.mockResolvedValue({ path: "/sandbox/media/inbound/abc.ogg", contentType: "audio/ogg" });
+    const { createMetaClient } = await import("./meta-client.js");
+
+    const { downloadWhatsappCloudInboundMedia } = await import("./channel.js");
+    await downloadWhatsappCloudInboundMedia({ mediaId: "media-1" });
+
+    expect(createMetaClient).toHaveBeenCalledWith(
+      expect.objectContaining({ graphApiVersion: "v22.0", maxMediaDownloadBytes: 52428800 }),
+    );
+
+    delete process.env.WHATSAPP_GRAPH_API_VERSION;
+    delete process.env.WHATSAPP_MAX_MEDIA_DOWNLOAD_BYTES;
+  });
+
+  it("ignores an invalid (non-numeric or non-positive) WHATSAPP_MAX_MEDIA_DOWNLOAD_BYTES and falls back to the default", async () => {
+    process.env.WHATSAPP_MAX_MEDIA_DOWNLOAD_BYTES = "not-a-number";
+    downloadMediaMock.mockResolvedValue({ bytes: new Uint8Array([1]), mimeType: "audio/ogg" });
+    saveMediaBufferMock.mockResolvedValue({ path: "/sandbox/media/inbound/abc.ogg", contentType: "audio/ogg" });
+    const { createMetaClient } = await import("./meta-client.js");
+
+    const { downloadWhatsappCloudInboundMedia } = await import("./channel.js");
+    await downloadWhatsappCloudInboundMedia({ mediaId: "media-1" });
+
+    expect(createMetaClient).toHaveBeenCalledWith(
+      expect.objectContaining({ maxMediaDownloadBytes: undefined }),
+    );
+
+    delete process.env.WHATSAPP_MAX_MEDIA_DOWNLOAD_BYTES;
+  });
+
   it("sendWhatsappCloudVoiceReply synthesizes text via Cartesia (with the default 'ar' language) then sends the resulting bytes as a voice note", async () => {
     synthesizeMock.mockResolvedValue({ audioBytes: new Uint8Array([9, 9, 9]), mimeType: "audio/mpeg" });
     sendAudioBytesMock.mockResolvedValue({ messageId: "wamid.audio1" });
@@ -458,6 +505,31 @@ describe("WhatsApp Cloud voice-note wiring", () => {
         expect(result).toEqual({ text: "hello how are you" });
       } finally {
         vi.useRealTimers();
+      }
+    });
+
+    it("honors WHATSAPP_STT_FALLBACK_MODEL override for the third-attempt fallback model", async () => {
+      process.env.WHATSAPP_STT_FALLBACK_MODEL = "custom-fallback-model";
+      vi.useFakeTimers();
+      try {
+        transcribeMock
+          .mockRejectedValueOnce(new Error("empty transcript"))
+          .mockRejectedValueOnce(new Error("empty transcript"))
+          .mockResolvedValueOnce("hello how are you");
+
+        const { createWhatsappCloudVoiceNoteTranscriber } = await import("./channel.js");
+        const transcribe = createWhatsappCloudVoiceNoteTranscriber({});
+
+        const resultPromise = transcribe({ filePath: "/sandbox/media/inbound/abc.ogg", contentType: "audio/ogg" });
+        await vi.advanceTimersByTimeAsync(3_000);
+        await resultPromise;
+
+        expect(createDeepgramClientMock).toHaveBeenCalledWith(
+          expect.objectContaining({ sttModel: "custom-fallback-model" }),
+        );
+      } finally {
+        vi.useRealTimers();
+        delete process.env.WHATSAPP_STT_FALLBACK_MODEL;
       }
     });
 

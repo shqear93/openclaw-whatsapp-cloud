@@ -51,7 +51,7 @@ describe("dispatchWhatsappInboundEvent", () => {
   it("builds a turn-kernel call routed to the whatsapp agent with a deterministic session key", async () => {
     const { runInbound, channelRuntime } = makeChannelRuntime();
 
-    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hi", messageId: "wamid.1" };
+    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hi", messageId: "wamid.1" };
 
     await dispatchWhatsappInboundEvent({
       cfg: makeAllowlistCfg(),
@@ -79,10 +79,10 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "text",
+        kind: "text",
         text: "check this out",
         messageId: "wamid.fwd",
-        forwarded: true,
+        provenance: { forwarded: true },
       };
 
       await dispatchWhatsappInboundEvent({
@@ -105,11 +105,10 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "text",
+        kind: "text",
         text: "share this with everyone",
         messageId: "wamid.freqfwd",
-        forwarded: true,
-        frequentlyForwarded: true,
+        provenance: { forwarded: true, frequentlyForwarded: true },
       };
 
       await dispatchWhatsappInboundEvent({
@@ -135,11 +134,10 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "text",
+        kind: "text",
         text: "yes, that one",
         messageId: "wamid.reply",
-        quotedMessageId: "wamid.original",
-        quotedFrom: ALLOWED_SENDER,
+        provenance: { quotedMessageId: "wamid.original", quotedFrom: ALLOWED_SENDER },
       };
 
       await dispatchWhatsappInboundEvent({
@@ -164,7 +162,7 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "text",
+        kind: "text",
         text: "hi",
         messageId: "wamid.plain",
       };
@@ -189,10 +187,10 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "audio",
-        audioMediaId: "media.fwd",
+        kind: "audio",
+        media: { mediaId: "media.fwd" },
         messageId: "wamid.audiofwd",
-        forwarded: true,
+        provenance: { forwarded: true },
       };
 
       const downloadVoiceNoteMedia = vi.fn().mockResolvedValue({ path: "/tmp/audio.ogg", contentType: "audio/ogg" });
@@ -219,8 +217,8 @@ describe("dispatchWhatsappInboundEvent", () => {
 
     const event: MetaWebhookEvent = {
       sender: ALLOWED_SENDER,
-      type: "audio",
-      audioMediaId: "media.1",
+      kind: "audio",
+      media: { mediaId: "media.1" },
       messageId: "wamid.2",
     };
 
@@ -246,8 +244,8 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "audio",
-        audioMediaId: "media.1",
+        kind: "audio",
+        media: { mediaId: "media.1" },
         messageId: "wamid.2",
       };
 
@@ -295,8 +293,8 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "audio",
-        audioMediaId: "media.1",
+        kind: "audio",
+        media: { mediaId: "media.1" },
         messageId: "wamid.2",
       };
 
@@ -351,8 +349,8 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "audio",
-        audioMediaId: "media.1",
+        kind: "audio",
+        media: { mediaId: "media.1" },
         messageId: "wamid.2",
       };
 
@@ -382,8 +380,8 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "audio",
-        audioMediaId: "media.1",
+        kind: "audio",
+        media: { mediaId: "media.1" },
         messageId: "wamid.2",
       };
 
@@ -417,8 +415,8 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "audio",
-        audioMediaId: "media.1",
+        kind: "audio",
+        media: { mediaId: "media.1" },
         messageId: "wamid.2",
       };
 
@@ -454,8 +452,8 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "audio",
-        audioMediaId: "media.1",
+        kind: "audio",
+        media: { mediaId: "media.1" },
         messageId: "wamid.2",
       };
 
@@ -481,7 +479,7 @@ describe("dispatchWhatsappInboundEvent", () => {
     it("still claims the durable delivery path for media replies, regardless of turn type", async () => {
       const { runInbound, channelRuntime } = makeChannelRuntime();
 
-      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hi", messageId: "wamid.1" };
+      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hi", messageId: "wamid.1" };
 
       await dispatchWhatsappInboundEvent({
         cfg: makeAllowlistCfg(),
@@ -508,7 +506,7 @@ describe("dispatchWhatsappInboundEvent", () => {
       const { runInbound, channelRuntime } = makeChannelRuntime();
       const sendText = vi.fn().mockResolvedValue(undefined);
 
-      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hi", messageId: "wamid.1" };
+      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hi", messageId: "wamid.1" };
 
       await dispatchWhatsappInboundEvent({ cfg: makeAllowlistCfg(), event, channelRuntime, sendText });
 
@@ -533,7 +531,7 @@ describe("dispatchWhatsappInboundEvent", () => {
       const { runInbound, channelRuntime } = makeChannelRuntime();
       const sendText = vi.fn().mockResolvedValue(undefined);
 
-      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hi", messageId: "wamid.1" };
+      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hi", messageId: "wamid.1" };
 
       await dispatchWhatsappInboundEvent({ cfg: makeAllowlistCfg(), event, channelRuntime, sendText });
 
@@ -562,7 +560,7 @@ describe("dispatchWhatsappInboundEvent", () => {
       const sendText = vi.fn().mockResolvedValue(undefined);
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "text",
+        kind: "text",
         text: "a new message",
         messageId: "wamid.3",
       };
@@ -603,8 +601,8 @@ describe("dispatchWhatsappInboundEvent", () => {
 
         const event: MetaWebhookEvent = {
           sender: ALLOWED_SENDER,
-          type: "audio",
-          audioMediaId: "media.1",
+          kind: "audio",
+          media: { mediaId: "media.1" },
           messageId: "wamid.2",
         };
 
@@ -670,8 +668,8 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "audio",
-        audioMediaId: "media.1",
+        kind: "audio",
+        media: { mediaId: "media.1" },
         messageId: "wamid.2",
       };
 
@@ -714,8 +712,8 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "image",
-        imageMediaId: "media.img.1",
+        kind: "image",
+        media: { mediaId: "media.img.1" },
         messageId: "wamid.3",
       };
 
@@ -757,9 +755,9 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "image",
-        imageMediaId: "media.img.2",
-        caption: "check this out",
+        kind: "image",
+        media: { mediaId: "media.img.2" },
+        text: "check this out",
         messageId: "wamid.4",
       };
 
@@ -784,8 +782,8 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "image",
-        imageMediaId: "media.img.3",
+        kind: "image",
+        media: { mediaId: "media.img.3" },
         messageId: "wamid.5",
       };
 
@@ -816,8 +814,8 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "image",
-        imageMediaId: "media.img.9",
+        kind: "image",
+        media: { mediaId: "media.img.9" },
         messageId: "wamid.9",
       };
 
@@ -854,8 +852,8 @@ describe("dispatchWhatsappInboundEvent", () => {
 
       const event: MetaWebhookEvent = {
         sender: ALLOWED_SENDER,
-        type: "image",
-        imageMediaId: "media.img.4",
+        kind: "image",
+        media: { mediaId: "media.img.4" },
         messageId: "wamid.6",
       };
 
@@ -883,7 +881,7 @@ describe("dispatchWhatsappInboundEvent", () => {
       const { runInbound, channelRuntime } = makeChannelRuntime();
       const sendText = vi.fn().mockResolvedValue(undefined);
 
-      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "/reset", messageId: "wamid.1" };
+      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "/reset", messageId: "wamid.1" };
 
       await dispatchWhatsappInboundEvent({ cfg: makeAllowlistCfg(), event, channelRuntime, sendText });
 
@@ -906,7 +904,7 @@ describe("dispatchWhatsappInboundEvent", () => {
   it("forwards media-only reply payloads via sendMedia instead of dropping them", async () => {
     const { runInbound, channelRuntime } = makeChannelRuntime();
 
-    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hi", messageId: "wamid.1" };
+    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hi", messageId: "wamid.1" };
     const sendText = vi.fn();
     const sendMedia = vi.fn().mockResolvedValue(undefined);
 
@@ -949,7 +947,7 @@ describe("dispatchWhatsappInboundEvent", () => {
     // fallback warning even though the image had already gone out correctly.
     const { runInbound, channelRuntime } = makeChannelRuntime();
 
-    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hi", messageId: "wamid.1" };
+    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hi", messageId: "wamid.1" };
     const sendText = vi.fn().mockResolvedValue(undefined);
     const sendMedia = vi.fn().mockResolvedValue(undefined);
 
@@ -981,7 +979,7 @@ describe("dispatchWhatsappInboundEvent", () => {
     // coverage -- only the singular mediaUrl field was ever tested.
     const { runInbound, channelRuntime } = makeChannelRuntime();
 
-    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hi", messageId: "wamid.1" };
+    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hi", messageId: "wamid.1" };
     const sendText = vi.fn().mockResolvedValue(undefined);
     const sendMedia = vi.fn().mockResolvedValue(undefined);
 
@@ -1029,7 +1027,7 @@ describe("dispatchWhatsappInboundEvent", () => {
 
     const firstEvent: MetaWebhookEvent = {
       sender: ALLOWED_SENDER,
-      type: "text",
+      kind: "text",
       text: "first message",
       messageId: "wamid.1",
     };
@@ -1047,7 +1045,7 @@ describe("dispatchWhatsappInboundEvent", () => {
 
     const secondEvent: MetaWebhookEvent = {
       sender: ALLOWED_SENDER,
-      type: "text",
+      kind: "text",
       text: "second message",
       messageId: "wamid.2",
     };
@@ -1073,7 +1071,7 @@ describe("dispatchWhatsappInboundEvent", () => {
     const { runInbound, channelRuntime } = makeChannelRuntime();
     runInbound.mockRejectedValue(failure);
 
-    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hi", messageId: "wamid.1" };
+    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hi", messageId: "wamid.1" };
     const sendText = vi.fn().mockResolvedValue(undefined);
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -1103,7 +1101,7 @@ describe("dispatchWhatsappInboundEvent", () => {
     const { runInbound, channelRuntime } = makeChannelRuntime();
     runInbound.mockRejectedValue(failure);
 
-    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hi", messageId: "wamid.1" };
+    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hi", messageId: "wamid.1" };
     const sendText = vi.fn().mockResolvedValue(undefined);
     const sendReaction = vi.fn().mockResolvedValue(undefined);
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -1136,7 +1134,7 @@ describe("dispatchWhatsappInboundEvent", () => {
     const { runInbound, channelRuntime } = makeChannelRuntime();
     runInbound.mockRejectedValue(failure);
 
-    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hi" };
+    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hi" };
     const sendText = vi.fn().mockResolvedValue(undefined);
     const sendReaction = vi.fn().mockResolvedValue(undefined);
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -1161,7 +1159,7 @@ describe("dispatchWhatsappInboundEvent", () => {
     const { runInbound, channelRuntime } = makeChannelRuntime();
     runInbound.mockRejectedValue(failure);
 
-    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hi", messageId: "wamid.1" };
+    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hi", messageId: "wamid.1" };
     const sendText = vi.fn().mockResolvedValue(undefined);
     const sendReaction = vi.fn().mockRejectedValue(new Error("reaction api down"));
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -1208,7 +1206,7 @@ describe("dispatchWhatsappInboundEvent", () => {
         }),
       );
 
-      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "make me an image", messageId: "wamid.1" };
+      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "make me an image", messageId: "wamid.1" };
 
       const dispatchPromise = dispatchWhatsappInboundEvent({
         cfg: makeAllowlistCfg(),
@@ -1249,7 +1247,7 @@ describe("dispatchWhatsappInboundEvent", () => {
       // settles, e.g. a stuck tool call or a stuck delivery.
       runInbound.mockImplementation(() => new Promise(() => {}));
 
-      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hi", messageId: "wamid.1" };
+      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hi", messageId: "wamid.1" };
       const sendText = vi.fn().mockResolvedValue(undefined);
       const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -1289,7 +1287,7 @@ describe("dispatchWhatsappInboundEvent", () => {
       reply: { dispatchReplyWithBufferedBlockDispatcher },
     } as any;
 
-    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hi", messageId: "wamid.1" };
+    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hi", messageId: "wamid.1" };
     const sendText = vi.fn().mockRejectedValue(new Error("send also failed"));
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -1320,7 +1318,7 @@ describe("dispatchWhatsappInboundEvent", () => {
       reply: { dispatchReplyWithBufferedBlockDispatcher },
     } as any;
 
-    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hi", messageId: "wamid.1" };
+    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hi", messageId: "wamid.1" };
     const markAsRead = vi.fn().mockResolvedValue(undefined);
     const callOrder: string[] = [];
     markAsRead.mockImplementation(async () => {
@@ -1358,8 +1356,8 @@ describe("dispatchWhatsappInboundEvent", () => {
 
     const event: MetaWebhookEvent = {
       sender: ALLOWED_SENDER,
-      type: "audio",
-      audioMediaId: "media.1",
+      kind: "audio",
+      media: { mediaId: "media.1" },
       messageId: "wamid.2",
     };
     const markAsRead = vi.fn().mockResolvedValue(undefined);
@@ -1387,7 +1385,7 @@ describe("dispatchWhatsappInboundEvent", () => {
   it("does not attempt to mark an event as read when it has no messageId", async () => {
     const { runInbound, channelRuntime } = makeChannelRuntime();
 
-    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hi" };
+    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hi" };
     const markAsRead = vi.fn().mockResolvedValue(undefined);
 
     await dispatchWhatsappInboundEvent({
@@ -1415,7 +1413,7 @@ describe("dispatchWhatsappInboundEvent", () => {
       reply: { dispatchReplyWithBufferedBlockDispatcher },
     } as any;
 
-    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hi", messageId: "wamid.1" };
+    const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hi", messageId: "wamid.1" };
     const markAsRead = vi.fn().mockRejectedValue(new Error("read receipt api down"));
     const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -1441,7 +1439,7 @@ describe("dispatchWhatsappInboundEvent", () => {
   it("accepts numeric senders and derives a deterministic session key", async () => {
     const { runInbound, channelRuntime } = makeChannelRuntime();
 
-    const event: MetaWebhookEvent = { sender: `+${ALLOWED_SENDER}`, type: "text", text: "hi", messageId: "wamid.1" };
+    const event: MetaWebhookEvent = { sender: `+${ALLOWED_SENDER}`, kind: "text", text: "hi", messageId: "wamid.1" };
 
     await dispatchWhatsappInboundEvent({
       cfg: makeAllowlistCfg(),
@@ -1462,7 +1460,7 @@ describe("dispatchWhatsappInboundEvent", () => {
   it("throws for a sender that is not a plausible phone number, avoiding session-key collisions", async () => {
     const { channelRuntime } = makeChannelRuntime();
 
-    const event: MetaWebhookEvent = { sender: "1-234", type: "text", text: "hi", messageId: "wamid.1" };
+    const event: MetaWebhookEvent = { sender: "1-234", kind: "text", text: "hi", messageId: "wamid.1" };
 
     await expect(
       dispatchWhatsappInboundEvent({
@@ -1479,7 +1477,7 @@ describe("dispatchWhatsappInboundEvent", () => {
       const { runInbound, channelRuntime } = makeChannelRuntime();
       const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-      const event: MetaWebhookEvent = { sender: "15551234567", type: "text", text: "hi", messageId: "wamid.1" };
+      const event: MetaWebhookEvent = { sender: "15551234567", kind: "text", text: "hi", messageId: "wamid.1" };
 
       await dispatchWhatsappInboundEvent({
         cfg: makeAllowlistCfg(),
@@ -1498,7 +1496,7 @@ describe("dispatchWhatsappInboundEvent", () => {
       const { runInbound, channelRuntime } = makeChannelRuntime();
       vi.spyOn(console, "warn").mockImplementation(() => {});
 
-      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hi", messageId: "wamid.1" };
+      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hi", messageId: "wamid.1" };
 
       await dispatchWhatsappInboundEvent({
         cfg: {} as any,
@@ -1515,7 +1513,7 @@ describe("dispatchWhatsappInboundEvent", () => {
     it("matches allowlisted senders whether or not the webhook sender includes a leading +", async () => {
       const { runInbound, channelRuntime } = makeChannelRuntime();
 
-      const event: MetaWebhookEvent = { sender: `+${ALLOWED_SENDER}`, type: "text", text: "hi", messageId: "wamid.1" };
+      const event: MetaWebhookEvent = { sender: `+${ALLOWED_SENDER}`, kind: "text", text: "hi", messageId: "wamid.1" };
 
       await dispatchWhatsappInboundEvent({
         cfg: makeAllowlistCfg(),
@@ -1532,7 +1530,7 @@ describe("dispatchWhatsappInboundEvent", () => {
     it("marks commands.authorized true for an allowlisted sender sending a control command", async () => {
       const { runInbound, buildContext, channelRuntime } = makeChannelRuntime();
 
-      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "/reset", messageId: "wamid.1" };
+      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "/reset", messageId: "wamid.1" };
 
       await dispatchWhatsappInboundEvent({
         cfg: makeAllowlistCfg(),
@@ -1558,7 +1556,7 @@ describe("dispatchWhatsappInboundEvent", () => {
     it("still populates access.commands for a plain chat message from an allowlisted sender", async () => {
       const { runInbound, buildContext, channelRuntime } = makeChannelRuntime();
 
-      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, type: "text", text: "hello there", messageId: "wamid.1" };
+      const event: MetaWebhookEvent = { sender: ALLOWED_SENDER, kind: "text", text: "hello there", messageId: "wamid.1" };
 
       await dispatchWhatsappInboundEvent({
         cfg: makeAllowlistCfg(),

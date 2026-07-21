@@ -134,7 +134,7 @@ describe("createMetaWebhookHandler", () => {
     expect(onEvent).toHaveBeenCalledTimes(1);
     expect(onEvent).toHaveBeenCalledWith({
       sender: "15551234567",
-      type: "text",
+      kind: "text",
       text: "hello there",
       messageId: "wamid.abc123",
     });
@@ -203,7 +203,7 @@ describe("parseMetaWebhookPayload", () => {
     expect(events).toEqual([
       {
         sender: "15551234567",
-        type: "text",
+        kind: "text",
         text: "hello there",
         messageId: "wamid.abc123",
       },
@@ -238,11 +238,10 @@ describe("parseMetaWebhookPayload", () => {
     expect(events).toEqual([
       {
         sender: "15551234567",
-        type: "text",
+        kind: "text",
         text: "look at this",
         messageId: "wamid.fwd",
-        forwarded: true,
-        frequentlyForwarded: true,
+        provenance: { forwarded: true, frequentlyForwarded: true },
       },
     ]);
   });
@@ -275,11 +274,10 @@ describe("parseMetaWebhookPayload", () => {
     expect(events).toEqual([
       {
         sender: "15551234567",
-        type: "text",
+        kind: "text",
         text: "yes exactly",
         messageId: "wamid.reply",
-        quotedMessageId: "wamid.original",
-        quotedFrom: "15551234567",
+        provenance: { quotedMessageId: "wamid.original", quotedFrom: "15551234567" },
       },
     ]);
   });
@@ -311,7 +309,7 @@ describe("parseMetaWebhookPayload", () => {
     expect(events).toEqual([
       {
         sender: "15551234567",
-        type: "text",
+        kind: "text",
         text: "hi",
         messageId: "wamid.plain",
       },
@@ -345,8 +343,8 @@ describe("parseMetaWebhookPayload", () => {
     expect(events).toEqual([
       {
         sender: "15551234567",
-        type: "audio",
-        audioMediaId: "media-abc",
+        kind: "audio",
+        media: { mediaId: "media-abc" },
         messageId: "wamid.audio123",
       },
     ]);
@@ -379,9 +377,9 @@ describe("parseMetaWebhookPayload", () => {
     expect(events).toEqual([
       {
         sender: "15551234567",
-        type: "image",
-        imageMediaId: "media-img-abc",
-        caption: "check this out",
+        kind: "image",
+        media: { mediaId: "media-img-abc" },
+        text: "check this out",
         messageId: "wamid.image123",
       },
     ]);
@@ -414,8 +412,8 @@ describe("parseMetaWebhookPayload", () => {
     expect(events).toEqual([
       {
         sender: "15551234567",
-        type: "image",
-        imageMediaId: "media-img-def",
+        kind: "image",
+        media: { mediaId: "media-img-def" },
         messageId: "wamid.image456",
       },
     ]);

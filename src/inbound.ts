@@ -194,16 +194,17 @@ function buildSupplementalContext(event: MetaWebhookEvent):
       untrustedContext?: Array<{ label: string; type?: string; payload: unknown }>;
     }
   | undefined {
-  const forwarded = event.forwarded ? { senderAllowed: true } : undefined;
-  const quote = event.quotedMessageId
+  const provenance = event.provenance;
+  const forwarded = provenance?.forwarded ? { senderAllowed: true } : undefined;
+  const quote = provenance?.quotedMessageId
     ? {
-        id: event.quotedMessageId,
-        ...(event.quotedFrom ? { sender: event.quotedFrom } : {}),
+        id: provenance.quotedMessageId,
+        ...(provenance.quotedFrom ? { sender: provenance.quotedFrom } : {}),
         senderAllowed: true,
         isQuote: true,
       }
     : undefined;
-  const untrustedContext = event.frequentlyForwarded
+  const untrustedContext = provenance?.frequentlyForwarded
     ? [
         {
           label: "WhatsApp forwarding signal",
@@ -393,7 +394,7 @@ export async function dispatchWhatsappInboundEvent(params: {
   } = params;
   const sender = event.sender;
   const sessionKey = sessionKeyFor(sender);
-  const rawText = event.type === "text" ? (event.text ?? "") : "";
+  const rawText = event.kind === "text" ? (event.text ?? "") : "";
 
   // Control commands (`/reset`, `/new`, etc.) are handled by the framework
   // BEFORE the agent ever runs, producing their own plain-text reply (e.g.
@@ -446,7 +447,7 @@ export async function dispatchWhatsappInboundEvent(params: {
   // receipt nor any typing indicator at all, since `keepTypingIndicatorAlive`
   // below only refreshes an already-started indicator (its first refresh
   // isn't due for TYPING_INDICATOR_REFRESH_MS), it never sends the first one.
-  if (markAsRead && (event.type === "text" || event.type === "audio" || event.type === "image") && event.messageId) {
+  if (markAsRead && (event.kind === "text" || event.kind === "audio" || event.kind === "image") && event.messageId) {
     try {
       await markAsRead({ messageId: event.messageId, typing: true });
     } catch (error) {
@@ -481,7 +482,7 @@ export async function dispatchWhatsappInboundEvent(params: {
         // `resolveTurn` runs, `rawText`/`textForAgent` are already plain
         // transcribed text, identical to a native text message.
         ingest: async (raw: MetaWebhookEvent) => {
-          if (raw.type === "text") {
+          if (raw.kind === "text") {
             return {
               id: raw.messageId ?? `${raw.sender}-${Date.now()}`,
               timestamp: Date.now(),
@@ -492,14 +493,14 @@ export async function dispatchWhatsappInboundEvent(params: {
             };
           }
 
-          if (raw.type === "audio" && raw.audioMediaId) {
+          if (raw.kind === "audio" && raw.media) {
             // No Deepgram wiring configured (e.g. DEEPGRAM_API_KEY unset) --
             // drop the turn cleanly exactly like the old "audio out of
             // scope" behavior, instead of throwing.
             if (!downloadVoiceNoteMedia) {
               return null;
             }
-            const audioMediaId = raw.audioMediaId;
+            const audioMediaId = raw.media.mediaId;
             // The download-to-sandbox step (already time-bounded, see
             // `meta-client.ts`'s `downloadMedia`) -- the unbounded custom
             // transcription call that caused the original production
@@ -561,13 +562,13 @@ export async function dispatchWhatsappInboundEvent(params: {
             };
           }
 
-          if (raw.type === "image" && raw.imageMediaId) {
+          if (raw.kind === "image" && raw.media) {
             // No download wiring configured -- drop the turn cleanly rather
             // than throwing, mirroring the voice-note behavior above.
             if (!downloadImageMedia) {
               return null;
             }
-            const imageMediaId = raw.imageMediaId;
+            const imageMediaId = raw.media.mediaId;
             const media = await downloadInboundMediaOrNotifyFailure({
               download: () => downloadImageMedia({ mediaId: imageMediaId }),
               sender: raw.sender,
@@ -577,7 +578,7 @@ export async function dispatchWhatsappInboundEvent(params: {
             if (!media) {
               return null;
             }
-            const caption = raw.caption ?? "";
+            const caption = raw.text ?? "";
 
             return {
               id: raw.messageId ?? `${raw.sender}-${Date.now()}`,

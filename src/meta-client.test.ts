@@ -39,6 +39,23 @@ describe("createMetaClient", () => {
       });
     });
 
+    it("honors a graphApiVersion override in the request URL", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(
+        jsonResponse({ messages: [{ id: "wamid.text123" }] }),
+      );
+      const client = createMetaClient({
+        accessToken: "token-123",
+        phoneNumberId: "555000",
+        fetchImpl,
+        graphApiVersion: "v22.0",
+      });
+
+      await client.sendText({ to: "15551234567", text: "hello there" });
+
+      const [url] = fetchImpl.mock.calls[0];
+      expect(url).toBe("https://graph.facebook.com/v22.0/555000/messages");
+    });
+
     it("throws when the API responds with an error status", async () => {
       const fetchImpl = vi.fn().mockResolvedValue(
         jsonResponse({ error: { message: "bad token" } }, false, 401),
@@ -359,6 +376,56 @@ describe("createMetaClient", () => {
 
       const result = await client.downloadMedia("media-abc");
       expect(result.bytes).toEqual(bytes);
+    });
+
+    it("honors a maxMediaDownloadBytes override, allowing a file that would exceed the default 20MB cap", async () => {
+      const bytes = new Uint8Array(21 * 1024 * 1024);
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValueOnce(
+          jsonResponse({ url: "https://example.com/signed", mime_type: "audio/ogg" }),
+        )
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Headers({ "content-length": String(bytes.byteLength) }),
+          text: () => Promise.resolve(""),
+          arrayBuffer: () => Promise.resolve(bytes.buffer),
+        } as unknown as Response);
+      const client = createMetaClient({
+        accessToken: "token-123",
+        phoneNumberId: "555000",
+        fetchImpl,
+        maxMediaDownloadBytes: 40 * 1024 * 1024,
+      });
+
+      const result = await client.downloadMedia("media-abc");
+      expect(result.bytes.byteLength).toBe(bytes.byteLength);
+    });
+
+    it("still rejects oversized media under a custom maxMediaDownloadBytes cap", async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValueOnce(
+          jsonResponse({ url: "https://example.com/signed", mime_type: "audio/ogg" }),
+        )
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Headers({ "content-length": String(11 * 1024 * 1024) }),
+          text: () => Promise.resolve(""),
+          arrayBuffer: vi.fn(),
+        } as unknown as Response);
+      const client = createMetaClient({
+        accessToken: "token-123",
+        phoneNumberId: "555000",
+        fetchImpl,
+        maxMediaDownloadBytes: 10 * 1024 * 1024,
+      });
+
+      await expect(client.downloadMedia("media-abc")).rejects.toThrow(
+        "exceeds maximum allowed size",
+      );
     });
   });
 

@@ -1,10 +1,18 @@
-const GRAPH_API_VERSION = "v21.0";
+// Meta bumps its Graph API version periodically and eventually sunsets old
+// ones -- defaulting to the last-confirmed-working version while letting a
+// deployer override it (`WHATSAPP_GRAPH_API_VERSION`, see channel.ts) means
+// picking up a new version doesn't require a code change/release here.
+const DEFAULT_GRAPH_API_VERSION = "v21.0";
 
 // Meta caps WhatsApp voice notes at 16MB; 20MB matches the generous headroom
 // used for image downloads (see message-adapter.ts's MAX_REMOTE_MEDIA_BYTES),
 // applying the same content-length-then-actual-length defense-in-depth here
-// since content-length can be absent or wrong.
-const MAX_MEDIA_DOWNLOAD_BYTES = 20 * 1024 * 1024;
+// since content-length can be absent or wrong. Overridable
+// (`WHATSAPP_MAX_MEDIA_DOWNLOAD_BYTES`, see channel.ts) since Meta's own caps
+// vary by media type/account tier and a deployer may need to raise this --
+// confirmed live: a real 41MB voice note was silently unprocessable under a
+// fixed 20MB cap with no way to admit it without a code change.
+const DEFAULT_MAX_MEDIA_DOWNLOAD_BYTES = 20 * 1024 * 1024;
 
 type FetchImpl = typeof fetch;
 
@@ -12,6 +20,8 @@ export type MetaClientOptions = {
   accessToken: string;
   phoneNumberId: string;
   fetchImpl?: FetchImpl;
+  graphApiVersion?: string;
+  maxMediaDownloadBytes?: number;
 };
 
 export type SendTextParams = {
@@ -88,8 +98,10 @@ function extensionForMimeType(mimeType: string, knownExtensions: Record<string, 
 export function createMetaClient(options: MetaClientOptions) {
   const { accessToken, phoneNumberId } = options;
   const fetchImpl: FetchImpl = options.fetchImpl ?? fetch;
-  const messagesUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/messages`;
-  const mediaUrl = `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/media`;
+  const graphApiVersion = options.graphApiVersion ?? DEFAULT_GRAPH_API_VERSION;
+  const maxMediaDownloadBytes = options.maxMediaDownloadBytes ?? DEFAULT_MAX_MEDIA_DOWNLOAD_BYTES;
+  const messagesUrl = `https://graph.facebook.com/${graphApiVersion}/${phoneNumberId}/messages`;
+  const mediaUrl = `https://graph.facebook.com/${graphApiVersion}/${phoneNumberId}/media`;
 
   async function post(payload: Record<string, unknown>, description: string): Promise<SendResult> {
     const to = payload.to;
@@ -183,7 +195,7 @@ export function createMetaClient(options: MetaClientOptions) {
   async function downloadMedia(mediaId: string): Promise<DownloadedMedia> {
     let metaResponse: Response;
     try {
-      metaResponse = await fetchImpl(`https://graph.facebook.com/${GRAPH_API_VERSION}/${mediaId}`, {
+      metaResponse = await fetchImpl(`https://graph.facebook.com/${graphApiVersion}/${mediaId}`, {
         method: "GET",
         headers: { Authorization: `Bearer ${accessToken}` },
         signal: AbortSignal.timeout(30_000),
@@ -231,16 +243,16 @@ export function createMetaClient(options: MetaClientOptions) {
     }
 
     const contentLength = Number(dataResponse.headers.get("content-length"));
-    if (Number.isFinite(contentLength) && contentLength > MAX_MEDIA_DOWNLOAD_BYTES) {
+    if (Number.isFinite(contentLength) && contentLength > maxMediaDownloadBytes) {
       throw new Error(
-        `Media download for ${mediaId} exceeds maximum allowed size: ${contentLength} > ${MAX_MEDIA_DOWNLOAD_BYTES} bytes`,
+        `Media download for ${mediaId} exceeds maximum allowed size: ${contentLength} > ${maxMediaDownloadBytes} bytes`,
       );
     }
 
     const arrayBuffer = await dataResponse.arrayBuffer();
-    if (arrayBuffer.byteLength > MAX_MEDIA_DOWNLOAD_BYTES) {
+    if (arrayBuffer.byteLength > maxMediaDownloadBytes) {
       throw new Error(
-        `Media download for ${mediaId} exceeds maximum allowed size: ${arrayBuffer.byteLength} > ${MAX_MEDIA_DOWNLOAD_BYTES} bytes`,
+        `Media download for ${mediaId} exceeds maximum allowed size: ${arrayBuffer.byteLength} > ${maxMediaDownloadBytes} bytes`,
       );
     }
 

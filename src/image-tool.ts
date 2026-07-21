@@ -9,7 +9,12 @@ export type GenerateImageConfig = {
   baseUrl: string;
   /** LiteLLM virtual/master API key. */
   apiKey: string;
-  /** LiteLLM `model_name` to request -- expected to be `pollinations-image`. */
+  /**
+   * LiteLLM `model_name` to request. Caller-configurable -- see
+   * `channel.ts`'s `resolveWhatsappImageGenerationModel`
+   * (`WHATSAPP_IMAGE_GENERATION_MODEL`, defaulting to this project's own
+   * reference deployment's `pollinations-image`).
+   */
   model: string;
   fetchImpl?: FetchImpl;
 };
@@ -31,12 +36,13 @@ export type GenerateImageResult = {
    * ~200-byte placeholder PNG after a couple of retries instead of the
    * real ~33KB image.
    *
-   * Both current backing providers (Pollinations.ai and AI Horde, see
-   * `litellm/bootstrap/custom_pollinations_image.py` and
-   * `custom_ai_horde_image.py`) always populate `ImageObject(b64_json=...)`
-   * themselves before LiteLLM's response is ever built, so this field is
-   * always populated from LiteLLM's `b64_json`, never fetched from a
-   * hosted URL.
+   * This project's own reference backend (Pollinations.ai and AI Horde, via
+   * the standalone `litellm-free-image-providers` package -- see
+   * ARCHITECTURE.md §5) always populates `ImageObject(b64_json=...)` itself
+   * before LiteLLM's response is ever built, so this field is always
+   * populated from LiteLLM's `b64_json`, never fetched from a hosted URL.
+   * A different backend a deployer points this at should do the same, since
+   * nothing here fetches from a `url` field as a fallback.
    */
   imageBase64: string;
   /** MIME type of the image, e.g. "image/jpeg" -- passed through to `saveMediaBuffer` as the file's content type. */
@@ -121,13 +127,13 @@ export async function generateImageForWhatsapp(
     return { imageBase64: b64Json, contentType: "image/jpeg" };
   }
 
-  // We always request `response_format: "b64_json"` above, and both
-  // current backing providers (Pollinations.ai and AI Horde) are custom
-  // LiteLLM handlers that unconditionally populate `b64_json` themselves
-  // (see litellm/bootstrap/custom_pollinations_image.py and
-  // custom_ai_horde_image.py) -- neither ever returns a plain `url`. A
-  // hosted-URL-only response is therefore not a real/expected shape from
-  // this stack's current providers; treat it the same as no image at all
-  // rather than silently returning a URL that can't be used as `buffer`.
+  // We always request `response_format: "b64_json"` above, and this
+  // project's own reference backend (Pollinations.ai and AI Horde, via the
+  // standalone `litellm-free-image-providers` package) unconditionally
+  // populates `b64_json` -- it never returns a plain `url`. A hosted-URL-only
+  // response is therefore not a shape this plugin knows how to use; treat it
+  // the same as no image at all rather than silently returning a URL that
+  // can't be used as `buffer`. A deployer pointing at a different backend
+  // needs their provider to behave the same way (populate `b64_json`).
   throw new Error("LiteLLM returned no image");
 }
