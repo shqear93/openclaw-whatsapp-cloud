@@ -97,7 +97,10 @@ describe("dispatchWhatsappInboundEvent", () => {
       await call.adapter.resolveTurn(input, { kind: "message", canStartAgentTurn: true }, {});
 
       const buildContextCall = buildContext.mock.calls[0][0];
-      expect(buildContextCall.supplemental).toEqual({ forwarded: { senderAllowed: true } });
+      expect(buildContextCall.supplemental).toEqual({
+        forwarded: { senderAllowed: true },
+        untrustedContext: [{ label: "WhatsApp forwarding signal", type: "forwarded", payload: { forwarded: true } }],
+      });
     });
 
     it("adds an untrustedContext entry for a frequently-forwarded message, alongside supplemental.forwarded", async () => {
@@ -125,7 +128,7 @@ describe("dispatchWhatsappInboundEvent", () => {
       const buildContextCall = buildContext.mock.calls[0][0];
       expect(buildContextCall.supplemental.forwarded).toEqual({ senderAllowed: true });
       expect(buildContextCall.supplemental.untrustedContext).toEqual([
-        { label: "WhatsApp forwarding signal", type: "frequently_forwarded", payload: { frequentlyForwarded: true } },
+        { label: "WhatsApp forwarding signal", type: "forwarded", payload: { forwarded: true, frequentlyForwarded: true } },
       ]);
     });
 
@@ -154,6 +157,13 @@ describe("dispatchWhatsappInboundEvent", () => {
       const buildContextCall = buildContext.mock.calls[0][0];
       expect(buildContextCall.supplemental).toEqual({
         quote: { id: "wamid.original", sender: ALLOWED_SENDER, senderAllowed: true, isQuote: true },
+        untrustedContext: [
+          {
+            label: "WhatsApp reply reference",
+            type: "quoted_message",
+            payload: { quotedMessageId: "wamid.original", quotedFrom: ALLOWED_SENDER },
+          },
+        ],
       });
     });
 
@@ -208,7 +218,45 @@ describe("dispatchWhatsappInboundEvent", () => {
       await call.adapter.resolveTurn(input, { kind: "message", canStartAgentTurn: true }, {});
 
       const buildContextCall = buildContext.mock.calls[0][0];
-      expect(buildContextCall.supplemental).toEqual({ forwarded: { senderAllowed: true } });
+      expect(buildContextCall.supplemental).toEqual({
+        forwarded: { senderAllowed: true },
+        untrustedContext: [{ label: "WhatsApp forwarding signal", type: "forwarded", payload: { forwarded: true } }],
+      });
+    });
+
+    it("regression: a bare forwarded=true with no identity data still produces an untrustedContext entry (the actual production bug: SDK's ForwardedFrom-gated rendering silently dropped this before)", async () => {
+      const { runInbound, buildContext, channelRuntime } = makeChannelRuntime();
+
+      // Deliberately mirrors real Meta webhook data: `forwarded: true` and
+      // NOTHING else identity-related, because Meta never gives an origin
+      // for a forwarded message. This is the exact shape that reached
+      // production on 2026-07-21 and produced no visible signal at all.
+      const event: MetaWebhookEvent = {
+        sender: ALLOWED_SENDER,
+        kind: "text",
+        text: "look at this",
+        messageId: "wamid.barefwd",
+        provenance: { forwarded: true },
+      };
+
+      await dispatchWhatsappInboundEvent({
+        cfg: makeAllowlistCfg(),
+        event,
+        channelRuntime,
+        sendText: vi.fn(),
+      });
+
+      const call = runInbound.mock.calls[0][0];
+      const input = await call.adapter.ingest(event);
+      await call.adapter.resolveTurn(input, { kind: "message", canStartAgentTurn: true }, {});
+
+      const buildContextCall = buildContext.mock.calls[0][0];
+      // This is the field the SDK's prompt renderer actually reads
+      // unconditionally -- assert on it directly, not just on `forwarded`
+      // (which Task 1's doc comment establishes is NOT sufficient alone).
+      expect(buildContextCall.supplemental.untrustedContext).toEqual([
+        { label: "WhatsApp forwarding signal", type: "forwarded", payload: { forwarded: true } },
+      ]);
     });
   });
 
