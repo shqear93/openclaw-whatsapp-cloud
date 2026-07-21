@@ -307,13 +307,24 @@ event.provenance) parsed in §2.1 onto the SDK's native
 plugin uses for "this text isn't necessarily the sender's own words," not a
 bespoke one:
 
-- `event.provenance?.forwarded` → `supplemental.forwarded = { senderAllowed: true }`.
-- `event.provenance?.quotedMessageId` → `supplemental.quote = { id, sender?, senderAllowed: true, isQuote: true }` —
-  id/sender only, since Meta never gives the quoted message's actual body.
-- `event.provenance?.frequentlyForwarded` → an `untrustedContext` entry (`label:
-  "WhatsApp forwarding signal"`), since `SupplementalContextFacts.forwarded`
-  has no dedicated frequency field — that shape describes *who* forwarded
-  it, not *how often*.
+- `event.provenance?.forwarded`/`frequentlyForwarded` → `supplemental.forwarded = { senderAllowed: true }` AND an `untrustedContext` entry (`label: "WhatsApp forwarding signal"`, `payload: { forwarded, frequentlyForwarded? }`).
+- `event.provenance?.quotedMessageId` → `supplemental.quote = { id, sender?, senderAllowed: true, isQuote: true }` AND a second `untrustedContext` entry (`label: "WhatsApp reply reference"`).
+
+**Why both `forwarded`/`quote` AND `untrustedContext`, for the same data:**
+confirmed by reading the installed `openclaw` package directly, its prompt
+renderer (`get-reply-*.js`) only shows a "Forwarded message context"/"Reply
+target" block when given `ForwardedFrom`/`ReplyToBody` — an identity and a
+message body that Meta's Cloud API structurally never provides (forward
+origin is hidden by WhatsApp by design; quoted bodies aren't in the
+webhook at all, only an id/sender reference). `supplemental.forwarded`/
+`supplemental.quote` alone are therefore silently dropped before reaching
+the model — confirmed live in production (2026-07-21): the agent told a
+user it had no information about whether a message was forwarded, despite
+the data being correctly parsed and threaded through `buildContext`.
+`untrustedContext` is the one field confirmed to render unconditionally
+(no per-field gating in the SDK's renderer), so both signals go there too.
+`forwarded`/`quote` are kept in addition, not replaced, in case a future
+SDK version starts reading them for something.
 
 `senderAllowed: true` is hardcoded for both, and this is a deliberate,
 channel-specific judgment call, not a shortcut: whatsapp-cloud is a direct
