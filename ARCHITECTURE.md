@@ -300,7 +300,9 @@ overwrite `Body` with) a redundant second Deepgram call.
 
 **Forwarding/reply provenance → `supplemental`.** The same `buildContext`
 call also passes `supplemental: buildSupplementalContext(event)`
-(`inbound.ts`), mapping the provenance fields (forwarded/frequentlyForwarded/quotedMessageId/quotedFrom, now nested under event.provenance) parsed in §2.1 onto the SDK's native
+(`inbound.ts`), mapping the provenance fields (forwarded/
+frequentlyForwarded/quotedMessageId/quotedFrom, now nested under
+event.provenance) parsed in §2.1 onto the SDK's native
 `SupplementalContextFacts` shape — the same mechanism every OpenClaw channel
 plugin uses for "this text isn't necessarily the sender's own words," not a
 bespoke one:
