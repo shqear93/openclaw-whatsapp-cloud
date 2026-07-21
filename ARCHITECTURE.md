@@ -300,16 +300,15 @@ overwrite `Body` with) a redundant second Deepgram call.
 
 **Forwarding/reply provenance → `supplemental`.** The same `buildContext`
 call also passes `supplemental: buildSupplementalContext(event)`
-(`inbound.ts`), mapping the `forwarded`/`frequentlyForwarded`/
-`quotedMessageId`/`quotedFrom` fields parsed in §2.1 onto the SDK's native
+(`inbound.ts`), mapping the provenance fields (forwarded/frequentlyForwarded/quotedMessageId/quotedFrom, now nested under event.provenance) parsed in §2.1 onto the SDK's native
 `SupplementalContextFacts` shape — the same mechanism every OpenClaw channel
 plugin uses for "this text isn't necessarily the sender's own words," not a
 bespoke one:
 
-- `event.forwarded` → `supplemental.forwarded = { senderAllowed: true }`.
-- `event.quotedMessageId` → `supplemental.quote = { id, sender?, senderAllowed: true, isQuote: true }` —
+- `event.provenance?.forwarded` → `supplemental.forwarded = { senderAllowed: true }`.
+- `event.provenance?.quotedMessageId` → `supplemental.quote = { id, sender?, senderAllowed: true, isQuote: true }` —
   id/sender only, since Meta never gives the quoted message's actual body.
-- `event.frequentlyForwarded` → an `untrustedContext` entry (`label:
+- `event.provenance?.frequentlyForwarded` → an `untrustedContext` entry (`label:
   "WhatsApp forwarding signal"`), since `SupplementalContextFacts.forwarded`
   has no dedicated frequency field — that shape describes *who* forwarded
   it, not *how often*.
