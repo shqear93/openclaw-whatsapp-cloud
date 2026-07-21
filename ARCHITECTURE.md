@@ -882,8 +882,12 @@ flowchart LR
 
 ## 4. Meta Graph API client — `meta-client.ts`
 
-`createMetaClient({ accessToken, phoneNumberId })` wraps the WhatsApp Cloud
-API (`graph.facebook.com/v21.0/{phoneNumberId}/...`):
+`createMetaClient({ accessToken, phoneNumberId, graphApiVersion?,
+maxMediaDownloadBytes? })` wraps the WhatsApp Cloud API
+(`graph.facebook.com/<version>/{phoneNumberId}/...`, defaulting to
+`v21.0` — `channel.ts` sources `graphApiVersion` from
+`WHATSAPP_GRAPH_API_VERSION`, letting a deployer pick up a newer Graph API
+version without a code change once Meta eventually sunsets `v21.0`):
 
 - `sendText` / `sendAudio` (by pre-uploaded media id) / `sendImage`
   (upload-then-reference) / `sendAudioBytes` (upload-then-reference, used
