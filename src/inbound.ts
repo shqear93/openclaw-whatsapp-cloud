@@ -170,9 +170,23 @@ function stripLeadingPlus(value: string): string {
  * Maps Meta's forwarding/reply provenance (parsed once in `webhook.ts`'s
  * `parseMetaWebhookPayload`, see `MetaWebhookEvent`'s doc comment) onto the
  * SDK's native `supplemental.forwarded`/`supplemental.quote`/
- * `untrustedContext` fields (`openclaw`'s `SupplementalContextFacts`) --
- * the same mechanism every other channel plugin uses for "this content
- * isn't necessarily the sender's own words," rather than a bespoke one.
+ * `untrustedContext` fields (`openclaw`'s `SupplementalContextFacts`).
+ *
+ * IMPORTANT: `forwarded`/`quote` alone are NOT sufficient to make this
+ * reach the agent's prompt -- confirmed by reading the installed
+ * `openclaw` package directly. `inbound-context-*.js`'s
+ * `applySupplementalContext` only extracts `ForwardedFrom`/
+ * `ForwardedFromType`/`ForwardedFromId`/`ForwardedDate` off `forwarded`
+ * (never `senderAllowed`, the only field we can ever set -- Meta's Cloud
+ * API never exposes who forwarded a message, by design), and
+ * `get-reply-*.js`'s prompt builder only renders a "Forwarded message
+ * context" block when `ForwardedFrom` is a non-empty string. Same problem
+ * for `quote`: the "Reply target" block requires `ReplyToBody` (the
+ * quoted message's actual text), which Meta's webhook never includes --
+ * only an id/sender reference. Confirmed live in production (2026-07-21):
+ * the agent told a user it had no information about whether a message was
+ * forwarded, despite `provenance.forwarded` being correctly parsed and
+ * threaded all the way to `buildContext`'s `supplemental` param.
  *
  * `senderAllowed: true` on both `forwarded` and `quote` is correct
  * specifically for this channel: whatsapp-cloud is a direct 1:1 surface
@@ -180,12 +194,17 @@ function stripLeadingPlus(value: string): string {
  * after `resolveWhatsappAccess` has already allowlist-checked `event.sender`
  * -- so `context.from` on a reply can only be that already-vetted sender or
  * the bot's own prior message, never an unvetted third party. This would
- * NOT be a safe default on a group-chat-capable channel.
+ * NOT be a safe default on a group-chat-capable channel. Kept even though
+ * the SDK doesn't currently surface them, on the chance a future SDK
+ * version reads bare presence/`senderAllowed` for something -- but do not
+ * rely on `forwarded`/`quote` alone for anything user-visible; only
+ * `untrustedContext` below is confirmed to reach the model.
  *
- * Meta's `frequently_forwarded` flag has no dedicated slot in
- * `SupplementalContextFacts.forwarded` (that shape is about who forwarded
- * it, not how often) -- it goes into `untrustedContext` instead, the SDK's
- * general-purpose bucket for exactly this kind of extra untrusted signal.
+ * `untrustedContext` is the ONLY confirmed-working path (`get-reply-*.js`
+ * renders every entry in `ctx.UntrustedStructuredContext` unconditionally,
+ * no per-field gating) -- so both the forwarding signal (forwarded and/or
+ * frequently_forwarded) and the reply/quote reference go there too, not
+ * just `frequentlyForwarded` as before.
  */
 function buildSupplementalContext(event: MetaWebhookEvent):
   | {
@@ -204,22 +223,36 @@ function buildSupplementalContext(event: MetaWebhookEvent):
         isQuote: true,
       }
     : undefined;
-  const untrustedContext = provenance?.frequentlyForwarded
-    ? [
-        {
-          label: "WhatsApp forwarding signal",
-          type: "frequently_forwarded",
-          payload: { frequentlyForwarded: true },
-        },
-      ]
-    : undefined;
-  if (!forwarded && !quote && !untrustedContext) {
+
+  const untrustedContext: Array<{ label: string; type?: string; payload: unknown }> = [];
+  if (provenance?.forwarded || provenance?.frequentlyForwarded) {
+    untrustedContext.push({
+      label: "WhatsApp forwarding signal",
+      type: "forwarded",
+      payload: {
+        ...(provenance.forwarded ? { forwarded: true } : {}),
+        ...(provenance.frequentlyForwarded ? { frequentlyForwarded: true } : {}),
+      },
+    });
+  }
+  if (provenance?.quotedMessageId) {
+    untrustedContext.push({
+      label: "WhatsApp reply reference",
+      type: "quoted_message",
+      payload: {
+        quotedMessageId: provenance.quotedMessageId,
+        ...(provenance.quotedFrom ? { quotedFrom: provenance.quotedFrom } : {}),
+      },
+    });
+  }
+
+  if (!forwarded && !quote && untrustedContext.length === 0) {
     return undefined;
   }
   return {
     ...(forwarded ? { forwarded } : {}),
     ...(quote ? { quote } : {}),
-    ...(untrustedContext ? { untrustedContext } : {}),
+    ...(untrustedContext.length > 0 ? { untrustedContext } : {}),
   };
 }
 
